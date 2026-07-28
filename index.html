@@ -1,0 +1,865 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Hill Climb Racing — Version 0.1</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #0a0a0a;
+      touch-action: none;
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    }
+    #gameCanvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      background: #87CEEB;
+    }
+    #ui-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      padding: 12px 16px;
+      pointer-events: none;
+      color: #fff;
+      text-shadow: 0 1px 3px rgba(0,0,0,0.7);
+      z-index: 10;
+    }
+    #ui-overlay .title {
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+    }
+    #ui-overlay .version {
+      font-size: 12px;
+      opacity: 0.85;
+      margin-top: 2px;
+    }
+    #ui-overlay .stats {
+      margin-top: 10px;
+      font-size: 13px;
+      font-variant-numeric: tabular-nums;
+      line-height: 1.45;
+    }
+    #mobile-controls {
+      position: absolute;
+      bottom: 24px;
+      left: 0;
+      right: 0;
+      display: flex;
+      justify-content: space-between;
+      padding: 0 28px;
+      z-index: 20;
+      pointer-events: none;
+    }
+    .ctrl-btn {
+      width: 76px;
+      height: 76px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.22);
+      border: 2.5px solid rgba(255, 255, 255, 0.65);
+      color: #fff;
+      font-size: 28px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      pointer-events: auto;
+      user-select: none;
+      -webkit-user-select: none;
+      backdrop-filter: blur(4px);
+      transition: background 0.1s, transform 0.1s;
+    }
+    .ctrl-btn:active,
+    .ctrl-btn.active {
+      background: rgba(255, 255, 255, 0.45);
+      transform: scale(0.94);
+    }
+    /* Hide mobile controls on larger screens */
+    @media (min-width: 900px) and (pointer: fine) {
+      #mobile-controls {
+        display: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <canvas id="gameCanvas"></canvas>
+
+  <div id="ui-overlay">
+    <div class="title">Hill Climb Racing</div>
+    <div class="version">Version 0.1 — Foundation</div>
+    <div class="stats">
+      <div id="fpsDisplay">FPS: —</div>
+      <div id="speedDisplay">Speed: 0 km/h</div>
+    </div>
+  </div>
+
+  <div id="mobile-controls">
+    <div class="ctrl-btn" id="btnLeft" aria-label="Brake / Reverse">◀</div>
+    <div class="ctrl-btn" id="btnRight" aria-label="Accelerate">▶</div>
+  </div>
+
+  <script>
+  /*
+   * ============================================================
+   * Hill Climb Racing Browser Game — Version 0.1 (Foundation)
+   * ============================================================
+   *
+   * Implemented in this version:
+   *  • Fullscreen responsive HTML5 Canvas (desktop + mobile)
+   *  • Professional fixed-timestep-friendly game loop with
+   *    requestAnimationFrame, delta-time, and stable FPS display
+   *  • Smooth camera that follows the vehicle
+   *  • Procedural smooth multi-frequency sine terrain
+   *    (ready to become infinite / chunked later)
+   *  • Playable two-wheel vehicle (chassis + wheels)
+   *  • Lightweight custom physics:
+   *      – Gravity, velocity, acceleration
+   *      – Ground collision & response
+   *      – Basic friction
+   *      – Vehicle rotation matching terrain slope
+   *      – Forward / reverse drive
+   *      – Ability to jump / leave the ground
+   *  • Desktop controls (← → / A D) + large mobile touch buttons
+   *  • Minimal UI: title, version label, FPS, speed
+   *  • Clean ES6 class architecture prepared for future systems
+   *  • Empty SaveManager (architecture only)
+   *  • 100 % offline, zero external dependencies or assets
+   *
+   * Future updates can extend these classes without rewriting
+   * the foundation.
+   * ============================================================
+   */
+
+  // ─────────────────────────────────────────────────────────────
+  // Config – central place for all tunable constants
+  // ─────────────────────────────────────────────────────────────
+  class Config {
+    // Physics
+    static GRAVITY          = 2200;   // px/s²
+    static ACCELERATION     = 1400;   // drive force magnitude
+    static REVERSE_ACCEL    = 900;
+    static MAX_SPEED        = 950;
+    static GROUND_FRICTION  = 3.2;    // strong damping when no input
+    static AIR_DRAG         = 0.15;
+    static WHEEL_RADIUS     = 18;
+    static WHEEL_BASE       = 58;     // distance between wheel centers
+    static CHASSIS_WIDTH    = 70;
+    static CHASSIS_HEIGHT   = 22;
+    static CHASSIS_OFFSET_Y = -8;     // chassis sits a bit above axles
+
+    // Camera
+    static CAMERA_LERP      = 6.5;    // higher = snappier
+    static CAMERA_OFFSET_Y  = 40;     // keep vehicle a bit above center
+
+    // Terrain
+    static TERRAIN_BASE_Y   = 420;
+    static TERRAIN_SAMPLE   = 12;     // px between samples when drawing
+
+    // Rendering
+    static SKY_TOP          = '#1a6fb5';
+    static SKY_BOTTOM       = '#87CEEB';
+    static GROUND_TOP       = '#3d8b37';
+    static GROUND_BOTTOM    = '#2a5c24';
+    static DIRT_COLOR       = '#5c4033';
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // MathUtils
+  // ─────────────────────────────────────────────────────────────
+  class MathUtils {
+    static clamp(v, min, max) {
+      return v < min ? min : (v > max ? max : v);
+    }
+
+    static lerp(a, b, t) {
+      return a + (b - a) * t;
+    }
+
+    static damp(current, target, lambda, dt) {
+      // Exponential smoothing (frame-rate independent)
+      return MathUtils.lerp(current, target, 1 - Math.exp(-lambda * dt));
+    }
+
+    static approxEq(a, b, eps = 0.001) {
+      return Math.abs(a - b) < eps;
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // InputManager
+  // ─────────────────────────────────────────────────────────────
+  class InputManager {
+    constructor() {
+      this.left  = false;
+      this.right = false;
+
+      this._onKeyDown = this._onKeyDown.bind(this);
+      this._onKeyUp   = this._onKeyUp.bind(this);
+
+      window.addEventListener('keydown', this._onKeyDown);
+      window.addEventListener('keyup',   this._onKeyUp);
+
+      // Mobile buttons
+      this._bindButton('btnLeft',  'left');
+      this._bindButton('btnRight', 'right');
+    }
+
+    _bindButton(id, prop) {
+      const el = document.getElementById(id);
+      if (!el) return;
+
+      const set = (v) => {
+        this[prop] = v;
+        el.classList.toggle('active', v);
+      };
+
+      el.addEventListener('touchstart', (e) => { e.preventDefault(); set(true);  }, { passive: false });
+      el.addEventListener('touchend',   (e) => { e.preventDefault(); set(false); }, { passive: false });
+      el.addEventListener('touchcancel',() => set(false));
+      el.addEventListener('mousedown',  () => set(true));
+      el.addEventListener('mouseup',    () => set(false));
+      el.addEventListener('mouseleave', () => set(false));
+    }
+
+    _onKeyDown(e) {
+      if (e.repeat) return;
+      switch (e.code) {
+        case 'ArrowLeft':
+        case 'KeyA':
+          this.left = true;
+          e.preventDefault();
+          break;
+        case 'ArrowRight':
+        case 'KeyD':
+          this.right = true;
+          e.preventDefault();
+          break;
+      }
+    }
+
+    _onKeyUp(e) {
+      switch (e.code) {
+        case 'ArrowLeft':
+        case 'KeyA':
+          this.left = false;
+          break;
+        case 'ArrowRight':
+        case 'KeyD':
+          this.right = false;
+          break;
+      }
+    }
+
+    destroy() {
+      window.removeEventListener('keydown', this._onKeyDown);
+      window.removeEventListener('keyup',   this._onKeyUp);
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // Camera
+  // ─────────────────────────────────────────────────────────────
+  class Camera {
+    constructor() {
+      this.x = 0;
+      this.y = 0;
+      this.width  = 0;
+      this.height = 0;
+    }
+
+    resize(w, h) {
+      this.width  = w;
+      this.height = h;
+    }
+
+    follow(targetX, targetY, dt) {
+      const desiredX = targetX - this.width  * 0.35; // slight look-ahead bias
+      const desiredY = targetY - this.height * 0.55 - Config.CAMERA_OFFSET_Y;
+
+      this.x = MathUtils.damp(this.x, desiredX, Config.CAMERA_LERP, dt);
+      this.y = MathUtils.damp(this.y, desiredY, Config.CAMERA_LERP * 0.85, dt);
+    }
+
+    worldToScreen(wx, wy) {
+      return {
+        x: wx - this.x,
+        y: wy - this.y
+      };
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // Terrain – procedural smooth hills (no chunks yet)
+  // ─────────────────────────────────────────────────────────────
+  class Terrain {
+    constructor() {
+      // Multi-layer sine waves produce natural-looking rolling hills
+      this.layers = [
+        { freq: 0.0028, amp: 95,  phase: 0.0  },
+        { freq: 0.0065, amp: 48,  phase: 1.7  },
+        { freq: 0.0130, amp: 22,  phase: 3.1  },
+        { freq: 0.0270, amp: 9,   phase: 0.4  }
+      ];
+    }
+
+    /** Returns ground surface Y at world X */
+    getHeight(x) {
+      let h = Config.TERRAIN_BASE_Y;
+      for (const layer of this.layers) {
+        h += Math.sin(x * layer.freq + layer.phase) * layer.amp;
+      }
+      return h;
+    }
+
+    /** Approximate slope (dy/dx) via central difference */
+    getSlope(x) {
+      const eps = 2;
+      return (this.getHeight(x + eps) - this.getHeight(x - eps)) / (2 * eps);
+    }
+
+    /**
+     * Draw a solid filled terrain strip covering the visible area.
+     * Samples are generated on the fly – later we can cache chunks.
+     */
+    render(ctx, camera) {
+      const startX = camera.x - 40;
+      const endX   = camera.x + camera.width + 40;
+      const step   = Config.TERRAIN_SAMPLE;
+
+      ctx.beginPath();
+      ctx.moveTo(startX - camera.x, camera.height + 20);
+
+      for (let wx = startX; wx <= endX; wx += step) {
+        const wy = this.getHeight(wx);
+        ctx.lineTo(wx - camera.x, wy - camera.y);
+      }
+
+      // Close the polygon downward
+      ctx.lineTo(endX - camera.x, camera.height + 20);
+      ctx.closePath();
+
+      // Gradient fill for depth
+      const grad = ctx.createLinearGradient(0, 0, 0, camera.height);
+      grad.addColorStop(0, Config.GROUND_TOP);
+      grad.addColorStop(0.55, Config.GROUND_BOTTOM);
+      grad.addColorStop(1, Config.DIRT_COLOR);
+      ctx.fillStyle = grad;
+      ctx.fill();
+
+      // Subtle top edge highlight
+      ctx.beginPath();
+      let first = true;
+      for (let wx = startX; wx <= endX; wx += step) {
+        const wy = this.getHeight(wx);
+        if (first) {
+          ctx.moveTo(wx - camera.x, wy - camera.y);
+          first = false;
+        } else {
+          ctx.lineTo(wx - camera.x, wy - camera.y);
+        }
+      }
+      ctx.strokeStyle = 'rgba(255,255,255,0.18)';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // Wheel (visual + local attachment data)
+  // ─────────────────────────────────────────────────────────────
+  class Wheel {
+    constructor(localX, localY, radius) {
+      this.localX   = localX;
+      this.localY   = localY;
+      this.radius   = radius;
+      this.angle    = 0;   // visual rotation
+    }
+
+    worldPosition(vehicleX, vehicleY, vehicleAngle) {
+      const cos = Math.cos(vehicleAngle);
+      const sin = Math.sin(vehicleAngle);
+      return {
+        x: vehicleX + this.localX * cos - this.localY * sin,
+        y: vehicleY + this.localX * sin + this.localY * cos
+      };
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // Vehicle
+  // ─────────────────────────────────────────────────────────────
+  class Vehicle {
+    constructor(startX, startY) {
+      this.x = startX;
+      this.y = startY;
+      this.angle = 0;
+      this.vx = 0;
+      this.vy = 0;
+      this.angularVel = 0;   // reserved for future air control
+      this.onGround = false;
+      this.speed = 0;        // scalar speed for UI
+
+      // Two wheels at axle height (localY = 0)
+      const half = Config.WHEEL_BASE * 0.5;
+      this.wheels = [
+        new Wheel(-half, 0, Config.WHEEL_RADIUS),
+        new Wheel( half, 0, Config.WHEEL_RADIUS)
+      ];
+    }
+
+    update(dt, input, terrain) {
+      // ── 1. Apply gravity ────────────────────────────────────
+      this.vy += Config.GRAVITY * dt;
+
+      // ── 2. Drive force (only when contacting ground) ───────
+      let drive = 0;
+      if (this.onGround) {
+        if (input.right) drive += Config.ACCELERATION;
+        if (input.left)  drive -= Config.REVERSE_ACCEL;
+      }
+
+      // Direction of the chassis (tangent)
+      const cosA = Math.cos(this.angle);
+      const sinA = Math.sin(this.angle);
+
+      if (drive !== 0) {
+        this.vx += drive * cosA * dt;
+        this.vy += drive * sinA * dt;
+      }
+
+      // ── 3. Drag / friction ─────────────────────────────────
+      if (this.onGround) {
+        // Strong ground friction when no throttle
+        const frictionFactor = (drive === 0) ? Config.GROUND_FRICTION : Config.GROUND_FRICTION * 0.25;
+        const damp = Math.exp(-frictionFactor * dt);
+        // Damp only the component along the surface
+        const along = this.vx * cosA + this.vy * sinA;
+        const alongDamped = along * damp;
+        // Remove old along component, add damped
+        this.vx = this.vx - along * cosA + alongDamped * cosA;
+        this.vy = this.vy - along * sinA + alongDamped * sinA;
+      } else {
+        // Light air drag
+        const air = Math.exp(-Config.AIR_DRAG * dt);
+        this.vx *= air;
+        this.vy *= air;
+      }
+
+      // ── 4. Integrate position ──────────────────────────────
+      this.x += this.vx * dt;
+      this.y += this.vy * dt;
+
+      // ── 5. Ground collision & orientation ──────────────────
+      this._resolveGround(terrain, dt);
+
+      // ── 6. Speed limit ─────────────────────────────────────
+      this.speed = Math.hypot(this.vx, this.vy);
+      if (this.speed > Config.MAX_SPEED) {
+        const s = Config.MAX_SPEED / this.speed;
+        this.vx *= s;
+        this.vy *= s;
+        this.speed = Config.MAX_SPEED;
+      }
+
+      // ── 7. Visual wheel spin ───────────────────────────────
+      // Use current orientation after possible angle correction
+      const c = Math.cos(this.angle);
+      const s = Math.sin(this.angle);
+      const spin = (this.vx * c + this.vy * s) * dt / Config.WHEEL_RADIUS;
+      for (const w of this.wheels) {
+        w.angle += spin;
+      }
+    }
+
+    _resolveGround(terrain, dt) {
+      const left  = this.wheels[0].worldPosition(this.x, this.y, this.angle);
+      const right = this.wheels[1].worldPosition(this.x, this.y, this.angle);
+
+      const leftGround  = terrain.getHeight(left.x);
+      const rightGround = terrain.getHeight(right.x);
+
+      const leftPen  = (left.y  + Config.WHEEL_RADIUS) - leftGround;
+      const rightPen = (right.y + Config.WHEEL_RADIUS) - rightGround;
+
+      const contactLeft  = leftPen  > -1.5;
+      const contactRight = rightPen > -1.5;
+
+      this.onGround = contactLeft || contactRight;
+
+      if (!this.onGround) return;
+
+      // Target angle from the two ground samples
+      // (y-down coordinate system → positive angle is clockwise)
+      const targetAngle = Math.atan2(rightGround - leftGround, Config.WHEEL_BASE);
+
+      // Smoothly approach the terrain angle (prevents visual popping)
+      this.angle = MathUtils.damp(this.angle, targetAngle, 16, dt);
+
+      // Average positive penetration
+      const avgPen = (Math.max(0, leftPen) + Math.max(0, rightPen)) * 0.5;
+
+      if (avgPen > 0) {
+        // Outward surface normal (points toward sky / decreasing y)
+        // Tangent = (cos, sin) → normal = (sin, -cos)
+        const nX = Math.sin(this.angle);
+        const nY = -Math.cos(this.angle);
+
+        // Separate along the normal
+        this.x += nX * avgPen;
+        this.y += nY * avgPen;
+
+        // Remove velocity component that is driving into the ground
+        const tX = Math.cos(this.angle);
+        const tY = Math.sin(this.angle);
+        const along = this.vx * tX + this.vy * tY;
+        this.vx = along * tX;
+        this.vy = along * tY;
+      }
+    }
+
+    render(ctx, camera) {
+      const sx = this.x - camera.x;
+      const sy = this.y - camera.y;
+
+      ctx.save();
+      ctx.translate(sx, sy);
+      ctx.rotate(this.angle);
+
+      // ── Chassis ───────────────────────────────────────────
+      const cw = Config.CHASSIS_WIDTH;
+      const ch = Config.CHASSIS_HEIGHT;
+      const cy = Config.CHASSIS_OFFSET_Y;
+
+      // Body (manual rounded rect for broad browser support)
+      const rx = -cw * 0.5, ry = cy - ch * 0.5, rw = cw, rh = ch, rr = 5;
+      ctx.fillStyle = '#c0392b';
+      ctx.strokeStyle = '#7b241c';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(rx + rr, ry);
+      ctx.lineTo(rx + rw - rr, ry);
+      ctx.quadraticCurveTo(rx + rw, ry, rx + rw, ry + rr);
+      ctx.lineTo(rx + rw, ry + rh - rr);
+      ctx.quadraticCurveTo(rx + rw, ry + rh, rx + rw - rr, ry + rh);
+      ctx.lineTo(rx + rr, ry + rh);
+      ctx.quadraticCurveTo(rx, ry + rh, rx, ry + rh - rr);
+      ctx.lineTo(rx, ry + rr);
+      ctx.quadraticCurveTo(rx, ry, rx + rr, ry);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      // Simple cabin / roof hint
+      ctx.fillStyle = '#922b21';
+      ctx.fillRect(-cw * 0.18, cy - ch * 0.5 - 12, cw * 0.36, 14);
+
+      // ── Wheels ────────────────────────────────────────────
+      for (const wheel of this.wheels) {
+        ctx.save();
+        ctx.translate(wheel.localX, wheel.localY);
+        ctx.rotate(wheel.angle);
+
+        // Tire
+        ctx.beginPath();
+        ctx.arc(0, 0, wheel.radius, 0, Math.PI * 2);
+        ctx.fillStyle = '#1c1c1c';
+        ctx.fill();
+        ctx.strokeStyle = '#444';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // Rim
+        ctx.beginPath();
+        ctx.arc(0, 0, wheel.radius * 0.55, 0, Math.PI * 2);
+        ctx.fillStyle = '#bdc3c7';
+        ctx.fill();
+
+        // Simple spokes
+        ctx.strokeStyle = '#7f8c8d';
+        ctx.lineWidth = 2;
+        for (let i = 0; i < 4; i++) {
+          const a = (i / 4) * Math.PI * 2;
+          ctx.beginPath();
+          ctx.moveTo(0, 0);
+          ctx.lineTo(Math.cos(a) * wheel.radius * 0.5, Math.sin(a) * wheel.radius * 0.5);
+          ctx.stroke();
+        }
+
+        ctx.restore();
+      }
+
+      ctx.restore();
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // PhysicsWorld (thin coordinator – future systems will expand)
+  // ─────────────────────────────────────────────────────────────
+  class PhysicsWorld {
+    constructor(terrain) {
+      this.terrain = terrain;
+    }
+
+    step(dt, vehicle, input) {
+      vehicle.update(dt, input, this.terrain);
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // CollisionSystem (placeholder architecture for future)
+  // ─────────────────────────────────────────────────────────────
+  class CollisionSystem {
+    // Currently collision is handled inside Vehicle for simplicity.
+    // Future versions will extract broad/narrow phase here.
+    constructor() {}
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // Renderer
+  // ─────────────────────────────────────────────────────────────
+  class Renderer {
+    constructor(canvas) {
+      this.canvas = canvas;
+      this.ctx = canvas.getContext('2d');
+      this.width  = 0;
+      this.height = 0;
+    }
+
+    resize(w, h) {
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      this.canvas.width  = w * dpr;
+      this.canvas.height = h * dpr;
+      this.canvas.style.width  = w + 'px';
+      this.canvas.style.height = h + 'px';
+      this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      this.width  = w;
+      this.height = h;
+    }
+
+    clear() {
+      // Sky gradient
+      const grad = this.ctx.createLinearGradient(0, 0, 0, this.height);
+      grad.addColorStop(0, Config.SKY_TOP);
+      grad.addColorStop(1, Config.SKY_BOTTOM);
+      this.ctx.fillStyle = grad;
+      this.ctx.fillRect(0, 0, this.width, this.height);
+    }
+
+    render(terrain, vehicle, camera) {
+      this.clear();
+      terrain.render(this.ctx, camera);
+      vehicle.render(this.ctx, camera);
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // UIManager
+  // ─────────────────────────────────────────────────────────────
+  class UIManager {
+    constructor() {
+      this.fpsEl   = document.getElementById('fpsDisplay');
+      this.speedEl = document.getElementById('speedDisplay');
+    }
+
+    update(fps, speed) {
+      // Convert px/s to a readable “km/h” feel (scaled)
+      const displaySpeed = Math.round(speed * 0.12);
+      this.fpsEl.textContent   = `FPS: ${fps}`;
+      this.speedEl.textContent = `Speed: ${displaySpeed} km/h`;
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // SaveManager – architecture only (no gameplay data yet)
+  // ─────────────────────────────────────────────────────────────
+  class SaveManager {
+    constructor() {
+      this.storageKey = 'hillclimb_v01';
+    }
+
+    save() {
+      // Intentionally empty in Version 0.1
+    }
+
+    load() {
+      // Intentionally empty in Version 0.1
+      return null;
+    }
+
+    clear() {
+      try {
+        localStorage.removeItem(this.storageKey);
+      } catch (_) {}
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // AssetGenerator – future procedural sprites / particles
+  // ─────────────────────────────────────────────────────────────
+  class AssetGenerator {
+    // Reserved for Version 0.2+ (particle textures, simple sprites, etc.)
+    constructor() {}
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // Animation – future utility for tweens / sequences
+  // ─────────────────────────────────────────────────────────────
+  class Animation {
+    // Reserved for later (UI transitions, vehicle damage anims…)
+    constructor() {}
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // Scene – holds the current playable content
+  // ─────────────────────────────────────────────────────────────
+  class Scene {
+    constructor() {
+      this.terrain  = new Terrain();
+      // Spawn slightly above the ground so the vehicle falls a short distance
+      const spawnX = 220;
+      const spawnY = this.terrain.getHeight(spawnX) - Config.WHEEL_RADIUS - 30;
+      this.vehicle  = new Vehicle(spawnX, spawnY);
+      this.physics  = new PhysicsWorld(this.terrain);
+      this.collision = new CollisionSystem();
+    }
+
+    update(dt, input) {
+      this.physics.step(dt, this.vehicle, input);
+    }
+
+    render(renderer, camera) {
+      renderer.render(this.terrain, this.vehicle, camera);
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // GameLoop
+  // ─────────────────────────────────────────────────────────────
+  class GameLoop {
+    constructor(updateFn, renderFn) {
+      this.updateFn = updateFn;
+      this.renderFn = renderFn;
+      this.lastTime = 0;
+      this.running  = false;
+      this.rafId    = null;
+
+      // FPS tracking
+      this.fps = 60;
+      this._frameCount = 0;
+      this._fpsTimer   = 0;
+    }
+
+    start() {
+      if (this.running) return;
+      this.running = true;
+      this.lastTime = performance.now();
+      this._frameCount = 0;
+      this._fpsTimer = 0;
+      this.rafId = requestAnimationFrame((t) => this._frame(t));
+    }
+
+    stop() {
+      this.running = false;
+      if (this.rafId !== null) {
+        cancelAnimationFrame(this.rafId);
+        this.rafId = null;
+      }
+    }
+
+    _frame(now) {
+      if (!this.running) return;
+
+      let dt = (now - this.lastTime) / 1000;
+      this.lastTime = now;
+
+      // Clamp huge spikes (tab switch, etc.)
+      if (dt > 0.05) dt = 0.05;
+
+      this.updateFn(dt);
+      this.renderFn();
+
+      // FPS
+      this._frameCount++;
+      this._fpsTimer += dt;
+      if (this._fpsTimer >= 0.5) {
+        this.fps = Math.round(this._frameCount / this._fpsTimer);
+        this._frameCount = 0;
+        this._fpsTimer = 0;
+      }
+
+      this.rafId = requestAnimationFrame((t) => this._frame(t));
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // Game – top-level orchestrator
+  // ─────────────────────────────────────────────────────────────
+  class Game {
+    constructor() {
+      this.canvas   = document.getElementById('gameCanvas');
+      this.renderer = new Renderer(this.canvas);
+      this.camera   = new Camera();
+      this.input    = new InputManager();
+      this.scene    = new Scene();
+      this.ui       = new UIManager();
+      this.save     = new SaveManager();
+      this.assets   = new AssetGenerator();
+
+      this.loop = new GameLoop(
+        (dt) => this.update(dt),
+        ()   => this.render()
+      );
+
+      this._onResize = this._onResize.bind(this);
+      window.addEventListener('resize', this._onResize);
+      this._onResize();
+
+      // Prevent scrolling / pull-to-refresh on mobile
+      document.body.addEventListener('touchmove', (e) => e.preventDefault(), { passive: false });
+    }
+
+    _onResize() {
+      const w = window.innerWidth;
+      const h = window.innerHeight;
+      this.renderer.resize(w, h);
+      this.camera.resize(w, h);
+    }
+
+    update(dt) {
+      this.scene.update(dt, this.input);
+      this.camera.follow(this.scene.vehicle.x, this.scene.vehicle.y, dt);
+      this.ui.update(this.loop.fps, this.scene.vehicle.speed);
+    }
+
+    render() {
+      this.scene.render(this.renderer, this.camera);
+    }
+
+    start() {
+      this.loop.start();
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // Bootstrap
+  // ─────────────────────────────────────────────────────────────
+  window.addEventListener('load', () => {
+    const game = new Game();
+    game.start();
+  });
+  </script>
+</body>
+</html>
