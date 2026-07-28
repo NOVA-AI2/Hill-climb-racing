@@ -1,0 +1,1540 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <title>Hill Climb Racing — Version 1.2</title>
+  <style>
+    :root {
+      --glass-bg: rgba(255,255,255,0.12);
+      --glass-border: rgba(255,255,255,0.22);
+      --glass-shadow: 0 8px 32px rgba(0,0,0,0.28);
+      --accent: #ff3b3b;
+      --gold: #ffd700;
+      --safe-top: env(safe-area-inset-top, 12px);
+      --safe-bottom: env(safe-area-inset-bottom, 12px);
+    }
+    * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+    html, body {
+      width:100%; height:100%; overflow:hidden;
+      background:#0a0a0a;
+      touch-action:none;
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      user-select:none; -webkit-user-select:none;
+    }
+    #gameCanvas {
+      display:block; width:100%; height:100%;
+      background:#87CEEB;
+    }
+
+    /* ─── TOP HUD ─────────────────────────────────────── */
+    #hud-top {
+      position:absolute; top:0; left:0; right:0;
+      padding: calc(var(--safe-top) + 8px) 14px 0;
+      display:flex; justify-content:space-between; align-items:flex-start;
+      pointer-events:none; z-index:20;
+    }
+    .glass {
+      background: var(--glass-bg);
+      backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+      border: 1px solid var(--glass-border);
+      box-shadow: var(--glass-shadow);
+      border-radius: 16px;
+    }
+    .logo-block {
+      display:flex; flex-direction:column; gap:8px;
+      pointer-events:none;
+    }
+    .logo {
+      font-size:15px; font-weight:800; letter-spacing:1.2px;
+      color:#fff; text-shadow:0 2px 8px rgba(0,0,0,0.5);
+      display:flex; align-items:center; gap:6px;
+    }
+    .logo-icon {
+      width:22px; height:22px; border-radius:6px;
+      background: linear-gradient(135deg,#e74c3c,#c0392b);
+      display:flex; align-items:center; justify-content:center;
+      font-size:12px; box-shadow:0 2px 6px rgba(231,76,60,0.5);
+    }
+    .dist-card {
+      padding:8px 14px; min-width:120px;
+      color:#fff; font-variant-numeric:tabular-nums;
+    }
+    .dist-card .label {
+      font-size:10px; opacity:0.7; letter-spacing:0.8px; text-transform:uppercase;
+    }
+    .dist-card .value {
+      font-size:18px; font-weight:700; margin-top:1px;
+    }
+    .dist-card .best {
+      font-size:11px; opacity:0.75; margin-top:2px;
+    }
+
+    /* Top center fuel */
+    #fuel-wrap {
+      position:absolute; top: calc(var(--safe-top) + 10px); left:50%;
+      transform:translateX(-50%);
+      width:min(220px, 42vw); pointer-events:none; z-index:21;
+    }
+    .fuel-label {
+      text-align:center; font-size:10px; color:rgba(255,255,255,0.75);
+      letter-spacing:1px; margin-bottom:4px; text-transform:uppercase;
+    }
+    .fuel-track {
+      height:14px; border-radius:20px;
+      background:rgba(0,0,0,0.35);
+      border:1px solid rgba(255,255,255,0.18);
+      overflow:hidden; position:relative;
+      box-shadow: inset 0 2px 6px rgba(0,0,0,0.4);
+    }
+    .fuel-fill {
+      height:100%; width:100%; border-radius:20px;
+      background: linear-gradient(90deg, #27ae60, #2ecc71);
+      transition: width 0.15s ease-out, background 0.3s;
+      box-shadow: 0 0 12px rgba(46,204,113,0.45);
+    }
+    .fuel-fill.low { background: linear-gradient(90deg,#f39c12,#e67e22); box-shadow:0 0 12px rgba(243,156,18,0.45); }
+    .fuel-fill.critical { background: linear-gradient(90deg,#c0392b,#e74c3c); box-shadow:0 0 14px rgba(231,76,60,0.55); animation: fuelPulse 0.7s infinite alternate; }
+    @keyframes fuelPulse { from { opacity:0.85; } to { opacity:1; } }
+
+    /* Top right buttons */
+    .top-right {
+      display:flex; gap:10px; pointer-events:auto;
+    }
+    .icon-btn {
+      width:46px; height:46px; border-radius:50%;
+      background: var(--glass-bg);
+      backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+      border:1.5px solid var(--glass-border);
+      box-shadow: var(--glass-shadow);
+      color:#fff; font-size:18px;
+      display:flex; align-items:center; justify-content:center;
+      cursor:pointer; transition: transform 0.12s, background 0.12s;
+      pointer-events:auto;
+    }
+    .icon-btn:active { transform:scale(0.88); background:rgba(255,255,255,0.28); }
+
+    /* Coin pill */
+    #coin-pill {
+      position:absolute; top: calc(var(--safe-top) + 62px); right:14px;
+      display:flex; align-items:center; gap:6px;
+      padding:6px 14px 6px 8px;
+      border-radius:30px;
+      background: linear-gradient(135deg, rgba(255,215,0,0.22), rgba(255,165,0,0.15));
+      border:1px solid rgba(255,215,0,0.4);
+      backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+      box-shadow: 0 4px 16px rgba(0,0,0,0.25);
+      color:#fff; font-weight:700; font-size:15px;
+      font-variant-numeric:tabular-nums; pointer-events:none; z-index:21;
+    }
+    .coin-icon {
+      width:22px; height:22px; border-radius:50%;
+      background: radial-gradient(circle at 35% 35%, #ffe566, #f1c40f 50%, #d4a017);
+      border:2px solid #b7950b;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.3), inset 0 1px 2px rgba(255,255,255,0.5);
+      display:flex; align-items:center; justify-content:center;
+      font-size:11px; font-weight:800; color:#7d6608;
+    }
+
+    /* ─── BOTTOM PEDALS ───────────────────────────────── */
+    #pedals {
+      position:absolute; bottom: calc(var(--safe-bottom) + 18px);
+      left:0; right:0;
+      display:flex; justify-content:space-between;
+      padding:0 28px; z-index:25; pointer-events:none;
+    }
+    .pedal {
+      width:92px; height:92px; border-radius:50%;
+      background: rgba(255,255,255,0.1);
+      backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+      border: 2.5px solid rgba(255,255,255,0.35);
+      box-shadow: 0 8px 28px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.25);
+      color:#fff; font-size:13px; font-weight:700;
+      display:flex; flex-direction:column; align-items:center; justify-content:center;
+      gap:2px; pointer-events:auto; user-select:none;
+      transition: transform 0.1s, background 0.1s, box-shadow 0.15s;
+      position:relative; overflow:hidden;
+    }
+    .pedal .pedal-icon { font-size:26px; line-height:1; }
+    .pedal.brake { border-color: rgba(231,76,60,0.55); }
+    .pedal.accel { border-color: rgba(46,204,113,0.55); }
+    .pedal.active {
+      transform: scale(0.9);
+      background: rgba(255,255,255,0.28);
+    }
+    .pedal.brake.active {
+      box-shadow: 0 0 24px rgba(231,76,60,0.55), inset 0 0 12px rgba(231,76,60,0.25);
+    }
+    .pedal.accel.active {
+      box-shadow: 0 0 24px rgba(46,204,113,0.55), inset 0 0 12px rgba(46,204,113,0.25);
+    }
+    .ripple {
+      position:absolute; border-radius:50%;
+      background: rgba(255,255,255,0.35);
+      transform: scale(0); pointer-events:none;
+      animation: rippleAnim 0.5s ease-out forwards;
+    }
+    @keyframes rippleAnim {
+      to { transform: scale(2.8); opacity:0; }
+    }
+
+    /* ─── GAUGES (canvas drawn, but containers for layout) ── */
+    #gauges {
+      position:absolute; bottom: calc(var(--safe-bottom) + 22px);
+      left:50%; transform:translateX(-50%);
+      display:flex; gap:18px; align-items:flex-end;
+      pointer-events:none; z-index:15;
+    }
+
+    /* ─── PAUSE MENU ──────────────────────────────────── */
+    #pause-menu, #settings-menu, #rotate-overlay {
+      position:absolute; inset:0;
+      background: rgba(8,10,18,0.72);
+      backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
+      display:none; align-items:center; justify-content:center;
+      z-index:50; flex-direction:column;
+    }
+    #pause-menu.show, #settings-menu.show, #rotate-overlay.show {
+      display:flex;
+    }
+    .menu-card {
+      background: rgba(20,22,32,0.92);
+      border:1px solid rgba(255,255,255,0.12);
+      border-radius:24px;
+      padding:28px 32px;
+      min-width:280px; max-width:90vw;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+      text-align:center;
+    }
+    .menu-card h2 {
+      color:#fff; font-size:22px; letter-spacing:2px;
+      margin-bottom:22px; font-weight:700;
+    }
+    .menu-btn {
+      display:block; width:100%;
+      padding:14px 0; margin:8px 0;
+      border:none; border-radius:14px;
+      font-size:16px; font-weight:600;
+      cursor:pointer; color:#fff;
+      background: linear-gradient(135deg, #3a3f55, #2a2e40);
+      border:1px solid rgba(255,255,255,0.1);
+      transition: transform 0.12s, background 0.12s;
+    }
+    .menu-btn:active { transform:scale(0.96); }
+    .menu-btn.primary {
+      background: linear-gradient(135deg, #e74c3c, #c0392b);
+      box-shadow: 0 4px 16px rgba(231,76,60,0.35);
+    }
+    .menu-btn.ghost {
+      background: transparent;
+      border:1px solid rgba(255,255,255,0.2);
+    }
+    .settings-row {
+      display:flex; align-items:center; justify-content:space-between;
+      padding:12px 4px; color:#ddd; font-size:15px;
+      border-bottom:1px solid rgba(255,255,255,0.06);
+    }
+    .settings-row:last-of-type { border-bottom:none; }
+    .toggle {
+      width:48px; height:28px; border-radius:20px;
+      background:rgba(255,255,255,0.15); position:relative;
+      cursor:pointer; transition: background 0.2s;
+    }
+    .toggle.on { background:#27ae60; }
+    .toggle::after {
+      content:''; position:absolute; top:3px; left:3px;
+      width:22px; height:22px; border-radius:50%;
+      background:#fff; transition: transform 0.2s;
+      box-shadow:0 2px 4px rgba(0,0,0,0.3);
+    }
+    .toggle.on::after { transform:translateX(20px); }
+
+    /* Rotate overlay */
+    #rotate-overlay {
+      background: rgba(5,8,15,0.92);
+      color:#fff; text-align:center; gap:18px;
+    }
+    #rotate-overlay .phone-icon {
+      font-size:64px;
+      animation: rotateHint 2s ease-in-out infinite;
+    }
+    @keyframes rotateHint {
+      0%,100% { transform: rotate(0deg); }
+      40% { transform: rotate(90deg); }
+      60% { transform: rotate(90deg); }
+    }
+    #rotate-overlay p {
+      font-size:18px; letter-spacing:1px; opacity:0.9;
+    }
+
+    /* Version badge */
+    #version-badge {
+      position:absolute; bottom:8px; left:50%; transform:translateX(-50%);
+      font-size:10px; color:rgba(255,255,255,0.35);
+      letter-spacing:1px; pointer-events:none; z-index:5;
+    }
+
+    /* Hide pedals on large pointer devices when not touch */
+    @media (min-width: 900px) and (pointer: fine) {
+      #pedals { display:none; }
+    }
+  </style>
+</head>
+<body>
+  <canvas id="gameCanvas"></canvas>
+
+  <!-- TOP HUD -->
+  <div id="hud-top">
+    <div class="logo-block">
+      <div class="logo"><div class="logo-icon">🏎</div> HILL CLIMB</div>
+      <div class="glass dist-card">
+        <div class="label">Distance</div>
+        <div class="value" id="distValue">0 m</div>
+        <div class="best" id="bestValue">Best 0 m</div>
+      </div>
+    </div>
+    <div class="top-right">
+      <div class="icon-btn" id="btnSettings" title="Settings">⚙</div>
+      <div class="icon-btn" id="btnPause" title="Pause">❚❚</div>
+    </div>
+  </div>
+
+  <!-- Fuel bar -->
+  <div id="fuel-wrap">
+    <div class="fuel-label">FUEL</div>
+    <div class="fuel-track">
+      <div class="fuel-fill" id="fuelFill" style="width:100%"></div>
+    </div>
+  </div>
+
+  <!-- Coin counter -->
+  <div id="coin-pill">
+    <div class="coin-icon">$</div>
+    <span id="coinValue">0</span>
+  </div>
+
+  <!-- Pedals -->
+  <div id="pedals">
+    <div class="pedal brake" id="btnLeft">
+      <div class="pedal-icon">⬤</div>
+      <span>BRAKE</span>
+    </div>
+    <div class="pedal accel" id="btnRight">
+      <div class="pedal-icon">▲</div>
+      <span>GAS</span>
+    </div>
+  </div>
+
+  <!-- Version -->
+  <div id="version-badge">v1.2</div>
+
+  <!-- Pause Menu -->
+  <div id="pause-menu">
+    <div class="menu-card">
+      <h2>PAUSED</h2>
+      <button class="menu-btn primary" id="btnResume">Resume</button>
+      <button class="menu-btn" id="btnRestart">Restart</button>
+      <button class="menu-btn" id="btnOpenSettings">Settings</button>
+      <button class="menu-btn ghost" id="btnExitPause">Continue</button>
+    </div>
+  </div>
+
+  <!-- Settings Menu -->
+  <div id="settings-menu">
+    <div class="menu-card">
+      <h2>SETTINGS</h2>
+      <div class="settings-row">
+        <span>Sound</span>
+        <div class="toggle on" id="togSound"></div>
+      </div>
+      <div class="settings-row">
+        <span>Music</span>
+        <div class="toggle on" id="togMusic"></div>
+      </div>
+      <div class="settings-row">
+        <span>Show FPS</span>
+        <div class="toggle" id="togFps"></div>
+      </div>
+      <div class="settings-row">
+        <span>Debug</span>
+        <div class="toggle" id="togDebug"></div>
+      </div>
+      <button class="menu-btn" id="btnResetProgress" style="margin-top:16px;background:#8e2a2a;">Reset Progress</button>
+      <button class="menu-btn ghost" id="btnCloseSettings">Back</button>
+    </div>
+  </div>
+
+  <!-- Rotate device -->
+  <div id="rotate-overlay">
+    <div class="phone-icon">📱</div>
+    <p>Rotate your device</p>
+    <p style="font-size:13px;opacity:0.6;">Landscape mode required</p>
+  </div>
+
+  <script>
+  /*
+   * ============================================================
+   * Hill Climb Racing Browser Game — Version 1.2
+   * ============================================================
+   * Theme: Professional Mobile Game UI + Immersive Experience
+   *
+   * CHANGELOG 1.2
+   * • Complete glassmorphism HUD redesign
+   * • Logo + distance / best cards
+   * • Animated fuel bar (green → yellow → red)
+   * • Coin pill with gold icon
+   * • Circular speedometer + RPM gauge (canvas)
+   * • Premium glass pedals with ripple & glow
+   * • Cinematic camera + landing screen-shake
+   * • Upgraded vehicle (details, shadow, suspension, headlights)
+   * • Richer terrain (grass edge, soil, stones, flowers, bushes)
+   * • Multi-layer parallax + sun + atmospheric fog
+   * • Particle system (dust, landing, dirt)
+   * • Beautiful pause & settings menus
+   * • Portrait → landscape rotate overlay
+   * • Expanded AudioManager placeholders
+   * • Fuel system + coin counter
+   * • All previous gameplay preserved
+   * ============================================================
+   */
+
+  // ─────────────────────────────────────────────────────────────
+  // Config
+  // ─────────────────────────────────────────────────────────────
+  class Config {
+    static GRAVITY            = 1950;
+    static ACCELERATION       = 1580;
+    static REVERSE_ACCEL      = 920;
+    static BRAKE_FORCE        = 2400;
+    static MAX_SPEED          = 1080;
+    static GROUND_FRICTION    = 2.7;
+    static AIR_DRAG           = 0.12;
+    static ANGULAR_DAMP       = 3.6;
+    static AIR_ANGULAR_DAMP   = 0.55;
+    static WHEEL_RADIUS       = 18;
+    static WHEEL_BASE         = 62;
+    static CHASSIS_WIDTH      = 74;
+    static CHASSIS_HEIGHT     = 24;
+    static CHASSIS_OFFSET_Y   = -11;
+    static MAX_SLOPE          = 1.12;
+    static LANDING_SQUASH     = 0.24;
+    static SQUASH_RECOVER     = 7.5;
+    static FUEL_MAX           = 100;
+    static FUEL_DRAIN         = 4.8;   // per second while accelerating
+    static FUEL_IDLE_DRAIN    = 0.35;
+    static CAMERA_LERP_X      = 5.2;
+    static CAMERA_LERP_Y      = 4.0;
+    static LOOK_AHEAD_FACTOR  = 0.32;
+    static CAMERA_OFFSET_Y    = 58;
+    static TERRAIN_BASE_Y     = 470;
+    static TERRAIN_SAMPLE     = 9;
+    static SKY_TOP            = '#0a3a6a';
+    static SKY_MID            = '#2a7ab0';
+    static SKY_BOTTOM         = '#9ec8e8';
+    static GROUND_TOP         = '#3da03a';
+    static GROUND_BOTTOM      = '#2a6a28';
+    static DIRT_COLOR         = '#5a3c28';
+    static VERSION            = '1.2';
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // MathUtils
+  // ─────────────────────────────────────────────────────────────
+  class MathUtils {
+    static clamp(v, min, max) { return v < min ? min : (v > max ? max : v); }
+    static lerp(a, b, t) { return a + (b - a) * t; }
+    static damp(current, target, lambda, dt) {
+      return MathUtils.lerp(current, target, 1 - Math.exp(-lambda * dt));
+    }
+    static sign(v) { return v < 0 ? -1 : (v > 0 ? 1 : 0); }
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // InputManager
+  // ─────────────────────────────────────────────────────────────
+  class InputManager {
+    constructor() {
+      this.left = false;
+      this.right = false;
+      this.pausePressed = false;
+      this.settingsPressed = false;
+
+      this._onKeyDown = this._onKeyDown.bind(this);
+      this._onKeyUp = this._onKeyUp.bind(this);
+      window.addEventListener('keydown', this._onKeyDown);
+      window.addEventListener('keyup', this._onKeyUp);
+
+      this._bindPedal('btnLeft', 'left');
+      this._bindPedal('btnRight', 'right');
+
+      document.getElementById('btnPause').addEventListener('click', () => { this.pausePressed = true; });
+      document.getElementById('btnSettings').addEventListener('click', () => { this.settingsPressed = true; });
+    }
+
+    _bindPedal(id, prop) {
+      const el = document.getElementById(id);
+      if (!el) return;
+      const set = (v, e) => {
+        this[prop] = v;
+        el.classList.toggle('active', v);
+        if (v && e) this._ripple(el, e);
+      };
+      el.addEventListener('touchstart', (e) => { e.preventDefault(); set(true, e.touches[0]); }, { passive: false });
+      el.addEventListener('touchend', (e) => { e.preventDefault(); set(false); }, { passive: false });
+      el.addEventListener('touchcancel', () => set(false));
+      el.addEventListener('mousedown', (e) => set(true, e));
+      el.addEventListener('mouseup', () => set(false));
+      el.addEventListener('mouseleave', () => set(false));
+    }
+
+    _ripple(el, point) {
+      const rect = el.getBoundingClientRect();
+      const r = document.createElement('div');
+      r.className = 'ripple';
+      const size = Math.max(rect.width, rect.height);
+      r.style.width = r.style.height = size + 'px';
+      r.style.left = (point.clientX - rect.left - size/2) + 'px';
+      r.style.top = (point.clientY - rect.top - size/2) + 'px';
+      el.appendChild(r);
+      setTimeout(() => r.remove(), 500);
+    }
+
+    _onKeyDown(e) {
+      if (e.repeat) return;
+      if (e.code === 'ArrowLeft' || e.code === 'KeyA') { this.left = true; e.preventDefault(); }
+      if (e.code === 'ArrowRight' || e.code === 'KeyD') { this.right = true; e.preventDefault(); }
+      if (e.code === 'Escape' || e.code === 'KeyP') { this.pausePressed = true; e.preventDefault(); }
+      if (e.code === 'KeyO') { this.settingsPressed = true; e.preventDefault(); }
+    }
+    _onKeyUp(e) {
+      if (e.code === 'ArrowLeft' || e.code === 'KeyA') this.left = false;
+      if (e.code === 'ArrowRight' || e.code === 'KeyD') this.right = false;
+    }
+    consumePause() {
+      if (this.pausePressed) { this.pausePressed = false; return true; }
+      return false;
+    }
+    consumeSettings() {
+      if (this.settingsPressed) { this.settingsPressed = false; return true; }
+      return false;
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // Camera (with shake)
+  // ─────────────────────────────────────────────────────────────
+  class Camera {
+    constructor() {
+      this.x = 0; this.y = 0;
+      this.width = 0; this.height = 0;
+      this._lookAhead = 0;
+      this.shakeX = 0; this.shakeY = 0;
+      this.shakeMag = 0;
+    }
+    resize(w, h) { this.width = w; this.height = h; }
+    follow(targetX, targetY, velX, dt) {
+      const desiredLook = velX * Config.LOOK_AHEAD_FACTOR;
+      this._lookAhead = MathUtils.damp(this._lookAhead, desiredLook, 3.2, dt);
+      const desiredX = targetX - this.width * 0.33 + this._lookAhead;
+      const desiredY = targetY - this.height * 0.55 - Config.CAMERA_OFFSET_Y;
+      this.x = MathUtils.damp(this.x, desiredX, Config.CAMERA_LERP_X, dt);
+      this.y = MathUtils.damp(this.y, desiredY, Config.CAMERA_LERP_Y, dt);
+
+      // Shake decay
+      this.shakeMag = MathUtils.damp(this.shakeMag, 0, 8, dt);
+      this.shakeX = (Math.random() - 0.5) * this.shakeMag;
+      this.shakeY = (Math.random() - 0.5) * this.shakeMag;
+    }
+    addShake(amount) {
+      this.shakeMag = Math.min(18, this.shakeMag + amount);
+    }
+    get viewX() { return this.x + this.shakeX; }
+    get viewY() { return this.y + this.shakeY; }
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // Terrain (richer details)
+  // ─────────────────────────────────────────────────────────────
+  class Terrain {
+    constructor() {
+      this.layers = [
+        { freq: 0.00185, amp: 115, phase: 0.0 },
+        { freq: 0.0041, amp: 58, phase: 2.3 },
+        { freq: 0.0084, amp: 32, phase: 4.1 },
+        { freq: 0.0168, amp: 15, phase: 1.5 },
+        { freq: 0.030, amp: 6.5, phase: 5.5 },
+        { freq: 0.052, amp: 3, phase: 0.9 }
+      ];
+      this.modFreq = 0.00035; this.modAmp = 0.2;
+      // Decorative elements (world x)
+      this.decor = [];
+      for (let i = 0; i < 90; i++) {
+        const x = i * 145 + Math.sin(i * 5.7) * 50;
+        const type = i % 5 === 0 ? 'bush' : (i % 3 === 0 ? 'flower' : 'stone');
+        this.decor.push({ x, type, scale: 0.7 + Math.abs(Math.sin(i * 2.1)) * 0.6 });
+      }
+    }
+    rawHeight(x) {
+      let h = Config.TERRAIN_BASE_Y;
+      const mod = 1 + Math.sin(x * this.modFreq) * this.modAmp;
+      for (const l of this.layers) h += Math.sin(x * l.freq + l.phase) * l.amp * mod;
+      return h;
+    }
+    getHeight(x) {
+      return this.rawHeight(x) * 0.6 + this.rawHeight(x-7) * 0.2 + this.rawHeight(x+7) * 0.2;
+    }
+    getSlope(x) {
+      const eps = 3;
+      return MathUtils.clamp((this.getHeight(x+eps) - this.getHeight(x-eps)) / (2*eps), -Config.MAX_SLOPE, Config.MAX_SLOPE);
+    }
+    render(ctx, camera) {
+      const startX = camera.viewX - 60;
+      const endX = camera.viewX + camera.width + 60;
+      const step = Config.TERRAIN_SAMPLE;
+      const vx = camera.viewX, vy = camera.viewY;
+
+      // Soil under-layer
+      ctx.beginPath();
+      ctx.moveTo(startX - vx, camera.height + 50);
+      for (let wx = startX; wx <= endX; wx += step) {
+        ctx.lineTo(wx - vx, this.getHeight(wx) - vy + 18);
+      }
+      ctx.lineTo(endX - vx, camera.height + 50);
+      ctx.closePath();
+      ctx.fillStyle = Config.DIRT_COLOR;
+      ctx.fill();
+
+      // Main grass body
+      ctx.beginPath();
+      ctx.moveTo(startX - vx, camera.height + 40);
+      for (let wx = startX; wx <= endX; wx += step) {
+        ctx.lineTo(wx - vx, this.getHeight(wx) - vy);
+      }
+      ctx.lineTo(endX - vx, camera.height + 40);
+      ctx.closePath();
+      const grad = ctx.createLinearGradient(0, 0, 0, camera.height);
+      grad.addColorStop(0, Config.GROUND_TOP);
+      grad.addColorStop(0.5, Config.GROUND_BOTTOM);
+      grad.addColorStop(1, '#1e4a1c');
+      ctx.fillStyle = grad;
+      ctx.fill();
+
+      // Grass edge highlight
+      ctx.beginPath();
+      let first = true;
+      for (let wx = startX; wx <= endX; wx += step) {
+        const wy = this.getHeight(wx);
+        if (first) { ctx.moveTo(wx - vx, wy - vy); first = false; }
+        else ctx.lineTo(wx - vx, wy - vy);
+      }
+      ctx.strokeStyle = 'rgba(120,200,90,0.55)';
+      ctx.lineWidth = 3;
+      ctx.stroke();
+
+      // Decor
+      for (const d of this.decor) {
+        if (d.x < startX - 20 || d.x > endX + 20) continue;
+        const gy = this.getHeight(d.x);
+        const sx = d.x - vx, sy = gy - vy;
+        if (d.type === 'stone') {
+          ctx.fillStyle = '#6a5a4a';
+          ctx.beginPath();
+          ctx.ellipse(sx, sy - 3 * d.scale, 7 * d.scale, 4 * d.scale, 0, 0, Math.PI * 2);
+          ctx.fill();
+        } else if (d.type === 'flower') {
+          ctx.fillStyle = '#e74c3c';
+          ctx.beginPath(); ctx.arc(sx, sy - 8 * d.scale, 3 * d.scale, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = '#f1c40f';
+          ctx.beginPath(); ctx.arc(sx, sy - 8 * d.scale, 1.4 * d.scale, 0, Math.PI * 2); ctx.fill();
+        } else {
+          // bush
+          ctx.fillStyle = '#2d6b2d';
+          ctx.beginPath();
+          ctx.arc(sx, sy - 10 * d.scale, 11 * d.scale, 0, Math.PI * 2);
+          ctx.arc(sx - 8 * d.scale, sy - 6 * d.scale, 8 * d.scale, 0, Math.PI * 2);
+          ctx.arc(sx + 8 * d.scale, sy - 6 * d.scale, 8 * d.scale, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // Background
+  // ─────────────────────────────────────────────────────────────
+  class Background {
+    constructor() {
+      this.clouds = [];
+      for (let i = 0; i < 10; i++) {
+        this.clouds.push({
+          x: Math.random() * 5000 - 600,
+          y: 30 + Math.random() * 150,
+          scale: 0.55 + Math.random() * 1.2,
+          speed: 6 + Math.random() * 16
+        });
+      }
+      this.trees = [];
+      for (let i = 0; i < 70; i++) {
+        this.trees.push({
+          x: i * 165 + Math.sin(i * 6.1) * 45,
+          scale: 0.65 + Math.abs(Math.sin(i * 2.8)) * 0.7
+        });
+      }
+      this.sunX = 0.78; this.sunY = 0.18;
+    }
+    update(dt, camera) {
+      if (!camera) return;
+      for (const c of this.clouds) {
+        c.x += c.speed * dt;
+        if (c.x - camera.viewX > camera.width + 250) c.x = camera.viewX - 280;
+        if (c.x - camera.viewX < -280) c.x = camera.viewX + camera.width + 120;
+      }
+    }
+    render(ctx, camera, terrain) {
+      const w = camera.width, h = camera.height;
+      const sky = ctx.createLinearGradient(0, 0, 0, h);
+      sky.addColorStop(0, Config.SKY_TOP);
+      sky.addColorStop(0.4, Config.SKY_MID);
+      sky.addColorStop(1, Config.SKY_BOTTOM);
+      ctx.fillStyle = sky;
+      ctx.fillRect(0, 0, w, h);
+
+      // Sun
+      const sx = w * this.sunX, sy = h * this.sunY;
+      const sunGrad = ctx.createRadialGradient(sx, sy, 0, sx, sy, 90);
+      sunGrad.addColorStop(0, 'rgba(255,240,180,0.95)');
+      sunGrad.addColorStop(0.3, 'rgba(255,210,100,0.5)');
+      sunGrad.addColorStop(1, 'rgba(255,180,50,0)');
+      ctx.fillStyle = sunGrad;
+      ctx.beginPath(); ctx.arc(sx, sy, 90, 0, Math.PI * 2); ctx.fill();
+
+      // Far mountains
+      this._mountains(ctx, camera, 0.1, 200, '#1e4a6a', 0.5);
+      this._mountains(ctx, camera, 0.2, 140, '#2a5e80', 0.65);
+      this._hills(ctx, camera, 0.36, 75, '#3a7a4a');
+
+      // Fog band
+      const fog = ctx.createLinearGradient(0, h * 0.45, 0, h * 0.75);
+      fog.addColorStop(0, 'rgba(180,210,230,0)');
+      fog.addColorStop(0.5, 'rgba(180,210,230,0.18)');
+      fog.addColorStop(1, 'rgba(180,210,230,0)');
+      ctx.fillStyle = fog;
+      ctx.fillRect(0, 0, w, h);
+
+      for (const c of this.clouds) {
+        this._cloud(ctx, c.x - camera.viewX * 0.5, c.y, c.scale);
+      }
+
+      const vs = camera.viewX - 80, ve = camera.viewX + w + 80;
+      for (const t of this.trees) {
+        if (t.x < vs || t.x > ve) continue;
+        const gy = terrain.getHeight(t.x);
+        this._tree(ctx, t.x - camera.viewX, gy - camera.viewY, t.scale);
+      }
+    }
+    _mountains(ctx, camera, p, base, color, alpha) {
+      const start = camera.viewX * p - 100;
+      const end = start + camera.width + 200;
+      ctx.beginPath();
+      ctx.moveTo(0, camera.height);
+      for (let wx = start; wx <= end; wx += 30) {
+        const local = wx - camera.viewX * p;
+        const n = Math.sin(wx * 0.0038) * 0.5 + Math.sin(wx * 0.009 + 1.4) * 0.3 + Math.sin(wx * 0.017) * 0.2;
+        ctx.lineTo(local, camera.height * 0.52 - base * (0.35 + n * 0.65));
+      }
+      ctx.lineTo(camera.width + 40, camera.height);
+      ctx.closePath();
+      ctx.fillStyle = color;
+      ctx.globalAlpha = alpha;
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+    _hills(ctx, camera, p, amp, color) {
+      const start = camera.viewX * p - 50;
+      const end = start + camera.width + 100;
+      ctx.beginPath();
+      ctx.moveTo(-20, camera.height);
+      for (let wx = start; wx <= end; wx += 18) {
+        const local = wx - camera.viewX * p;
+        ctx.lineTo(local, camera.height * 0.7 + Math.sin(wx * 0.0065) * amp + Math.sin(wx * 0.014 + 2) * amp * 0.4);
+      }
+      ctx.lineTo(camera.width + 20, camera.height);
+      ctx.closePath();
+      ctx.fillStyle = color;
+      ctx.globalAlpha = 0.5;
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+    _cloud(ctx, x, y, s) {
+      ctx.fillStyle = 'rgba(255,255,255,0.72)';
+      ctx.beginPath();
+      ctx.arc(x, y, 20 * s, 0, Math.PI * 2);
+      ctx.arc(x + 26 * s, y - 5 * s, 24 * s, 0, Math.PI * 2);
+      ctx.arc(x + 52 * s, y + 2 * s, 18 * s, 0, Math.PI * 2);
+      ctx.arc(x + 28 * s, y + 9 * s, 16 * s, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    _tree(ctx, x, y, s) {
+      ctx.fillStyle = '#3d2a1a';
+      ctx.fillRect(x - 3.5 * s, y - 30 * s, 7 * s, 30 * s);
+      ctx.fillStyle = '#1e5c1e';
+      ctx.beginPath();
+      ctx.arc(x, y - 40 * s, 17 * s, 0, Math.PI * 2);
+      ctx.arc(x - 11 * s, y - 30 * s, 13 * s, 0, Math.PI * 2);
+      ctx.arc(x + 11 * s, y - 30 * s, 13 * s, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#2d8a2d';
+      ctx.beginPath(); ctx.arc(x, y - 45 * s, 10 * s, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // ParticleSystem
+  // ─────────────────────────────────────────────────────────────
+  class ParticleSystem {
+    constructor() {
+      this.particles = [];
+    }
+    emit(x, y, count, opts = {}) {
+      for (let i = 0; i < count; i++) {
+        this.particles.push({
+          x, y,
+          vx: (Math.random() - 0.5) * (opts.spread || 120),
+          vy: -Math.random() * (opts.up || 90) - 20,
+          life: 0.4 + Math.random() * 0.5,
+          maxLife: 0.4 + Math.random() * 0.5,
+          size: 2 + Math.random() * (opts.size || 4),
+          color: opts.color || 'rgba(140,110,70,0.7)',
+          type: opts.type || 'dust'
+        });
+      }
+    }
+    update(dt) {
+      for (let i = this.particles.length - 1; i >= 0; i--) {
+        const p = this.particles[i];
+        p.life -= dt;
+        if (p.life <= 0) { this.particles.splice(i, 1); continue; }
+        p.x += p.vx * dt;
+        p.y += p.vy * dt;
+        p.vy += 280 * dt;
+        p.vx *= 0.96;
+      }
+    }
+    render(ctx, camera) {
+      for (const p of this.particles) {
+        const alpha = p.life / p.maxLife;
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.arc(p.x - camera.viewX, p.y - camera.viewY, p.size * alpha, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // Wheel
+  // ─────────────────────────────────────────────────────────────
+  class Wheel {
+    constructor(localX, localY, radius) {
+      this.localX = localX; this.localY = localY;
+      this.radius = radius; this.angle = 0;
+      this.onGround = false; this.penetration = 0;
+    }
+    worldPosition(vx, vy, angle) {
+      const c = Math.cos(angle), s = Math.sin(angle);
+      return { x: vx + this.localX * c - this.localY * s, y: vy + this.localX * s + this.localY * c };
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // Vehicle
+  // ─────────────────────────────────────────────────────────────
+  class Vehicle {
+    constructor(startX, startY) {
+      this.x = startX; this.y = startY;
+      this.angle = 0; this.vx = 0; this.vy = 0;
+      this.angularVel = 0; this.onGround = false;
+      this.speed = 0; this.distance = 0; this._lastX = startX;
+      this.squash = 1.0;
+      this.fuel = Config.FUEL_MAX;
+      this.rpm = 0; // 0..1 visual
+      this.coins = 0;
+      this._coinAcc = 0;
+      const half = Config.WHEEL_BASE * 0.5;
+      this.wheels = [new Wheel(-half, 0, Config.WHEEL_RADIUS), new Wheel(half, 0, Config.WHEEL_RADIUS)];
+      this._wasOnGround = true;
+    }
+    update(dt, input, terrain, particles, camera) {
+      this.vy += Config.GRAVITY * dt;
+      const cosA = Math.cos(this.angle), sinA = Math.sin(this.angle);
+      let drive = 0;
+      const hasFuel = this.fuel > 0.5;
+
+      if (this.onGround && hasFuel) {
+        if (input.right) drive = Config.ACCELERATION;
+        if (input.left) drive = -Config.REVERSE_ACCEL;
+        const along = this.vx * cosA + this.vy * sinA;
+        if (input.left && along > 50) drive = -Config.BRAKE_FORCE;
+      } else if (this.onGround && input.left) {
+        // still allow brake without fuel
+        const along = this.vx * cosA + this.vy * sinA;
+        if (along > 30) drive = -Config.BRAKE_FORCE * 0.85;
+      }
+
+      // Fuel drain
+      if (input.right && hasFuel) this.fuel -= Config.FUEL_DRAIN * dt;
+      else this.fuel -= Config.FUEL_IDLE_DRAIN * dt;
+      this.fuel = MathUtils.clamp(this.fuel, 0, Config.FUEL_MAX);
+
+      // RPM visual
+      const targetRpm = (input.right && hasFuel) ? Math.min(1, 0.35 + this.speed / Config.MAX_SPEED * 0.7) : this.speed / Config.MAX_SPEED * 0.4;
+      this.rpm = MathUtils.damp(this.rpm, targetRpm, 6, dt);
+
+      if (drive !== 0) {
+        this.vx += drive * cosA * dt;
+        this.vy += drive * sinA * dt;
+      }
+
+      if (this.onGround) {
+        const ff = (drive === 0) ? Config.GROUND_FRICTION : Config.GROUND_FRICTION * 0.16;
+        const damp = Math.exp(-ff * dt);
+        const along = this.vx * cosA + this.vy * sinA;
+        this.vx = this.vx - along * cosA + along * damp * cosA;
+        this.vy = this.vy - along * sinA + along * damp * sinA;
+        this.angularVel *= Math.exp(-Config.ANGULAR_DAMP * dt);
+
+        // Dust particles when moving
+        if (Math.abs(along) > 80 && Math.random() < 0.4) {
+          const w = this.wheels[Math.random() < 0.5 ? 0 : 1];
+          const p = w.worldPosition(this.x, this.y, this.angle);
+          particles.emit(p.x, p.y + Config.WHEEL_RADIUS * 0.6, 1, { spread: 40, up: 30, size: 3, color: 'rgba(120,90,50,0.55)' });
+        }
+      } else {
+        const air = Math.exp(-Config.AIR_DRAG * dt);
+        this.vx *= air; this.vy *= air;
+        this.angularVel *= Math.exp(-Config.AIR_ANGULAR_DAMP * dt);
+        if (input.left) this.angularVel -= 2.6 * dt;
+        if (input.right) this.angularVel += 2.6 * dt;
+      }
+
+      this.x += this.vx * dt;
+      this.y += this.vy * dt;
+      this.angle += this.angularVel * dt;
+
+      this._resolveGround(terrain, dt, particles, camera);
+
+      this.speed = Math.hypot(this.vx, this.vy);
+      if (this.speed > Config.MAX_SPEED) {
+        const s = Config.MAX_SPEED / this.speed;
+        this.vx *= s; this.vy *= s; this.speed = Config.MAX_SPEED;
+      }
+
+      const dx = this.x - this._lastX;
+      if (dx > 0) {
+        this.distance += dx;
+        this._coinAcc += dx * 0.015;
+        if (this._coinAcc >= 1) {
+          const add = Math.floor(this._coinAcc);
+          this.coins += add;
+          this._coinAcc -= add;
+        }
+      }
+      this._lastX = this.x;
+
+      const c = Math.cos(this.angle), s = Math.sin(this.angle);
+      const spin = (this.vx * c + this.vy * s) * dt / Config.WHEEL_RADIUS;
+      for (const w of this.wheels) w.angle += spin;
+      this.squash = MathUtils.damp(this.squash, 1.0, Config.SQUASH_RECOVER, dt);
+    }
+
+    _resolveGround(terrain, dt, particles, camera) {
+      let any = false, avgPen = 0, count = 0, torque = 0;
+      for (const w of this.wheels) {
+        const pos = w.worldPosition(this.x, this.y, this.angle);
+        const gy = terrain.getHeight(pos.x);
+        const pen = (pos.y + w.radius) - gy;
+        w.penetration = pen;
+        w.onGround = pen > -1.2;
+        if (w.onGround) {
+          any = true;
+          if (pen > 0) { avgPen += pen; count++; torque += -w.localX * pen * 0.04; }
+        }
+      }
+      const landed = any && !this._wasOnGround;
+      this._wasOnGround = any;
+      this.onGround = any;
+      if (!any) return;
+
+      const left = this.wheels[0].worldPosition(this.x, this.y, this.angle);
+      const right = this.wheels[1].worldPosition(this.x, this.y, this.angle);
+      const targetA = Math.atan2(terrain.getHeight(right.x) - terrain.getHeight(left.x), Config.WHEEL_BASE);
+      this.angle = MathUtils.damp(this.angle, targetA, count >= 2 ? 13 : 6.5, dt);
+      this.angularVel += torque * (1 / Math.max(dt, 0.001)) * 0.012;
+      this.angularVel = MathUtils.clamp(this.angularVel, -4.2, 4.2);
+
+      if (count > 0) {
+        avgPen /= count;
+        if (avgPen > 0) {
+          const nX = Math.sin(this.angle), nY = -Math.cos(this.angle);
+          this.x += nX * avgPen;
+          this.y += nY * avgPen;
+          const tX = Math.cos(this.angle), tY = Math.sin(this.angle);
+          const along = this.vx * tX + this.vy * tY;
+          this.vx = along * tX; this.vy = along * tY;
+
+          if (landed || this.vy > 100) {
+            const impact = MathUtils.clamp((this.vy || 200) / 550, 0, 1);
+            this.squash = Math.max(0.7, 1 - impact * Config.LANDING_SQUASH);
+            this.angularVel *= 0.5;
+            if (camera) camera.addShake(impact * 11);
+            if (particles) {
+              const mid = this.wheels[0].worldPosition(this.x, this.y, this.angle);
+              particles.emit(mid.x, mid.y + 10, 6 + Math.floor(impact * 8), {
+                spread: 160, up: 110, size: 5, color: 'rgba(130,100,60,0.65)'
+              });
+            }
+          }
+        }
+      }
+    }
+
+    render(ctx, camera, debug) {
+      const sx = this.x - camera.viewX, sy = this.y - camera.viewY;
+      // Shadow
+      ctx.save();
+      ctx.translate(sx, sy + 6);
+      ctx.rotate(this.angle);
+      ctx.scale(1, 0.35);
+      ctx.beginPath();
+      ctx.ellipse(0, 0, Config.CHASSIS_WIDTH * 0.55, 14, 0, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(0,0,0,0.28)';
+      ctx.fill();
+      ctx.restore();
+
+      ctx.save();
+      ctx.translate(sx, sy);
+      ctx.rotate(this.angle);
+      ctx.scale(1, this.squash);
+
+      const cw = Config.CHASSIS_WIDTH, ch = Config.CHASSIS_HEIGHT, cy = Config.CHASSIS_OFFSET_Y;
+
+      // Body
+      const rx = -cw*0.5, ry = cy - ch*0.5, rw = cw, rh = ch, rr = 6;
+      ctx.fillStyle = '#d63031';
+      ctx.strokeStyle = '#922b21';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(rx+rr, ry);
+      ctx.lineTo(rx+rw-rr, ry);
+      ctx.quadraticCurveTo(rx+rw, ry, rx+rw, ry+rr);
+      ctx.lineTo(rx+rw, ry+rh-rr);
+      ctx.quadraticCurveTo(rx+rw, ry+rh, rx+rw-rr, ry+rh);
+      ctx.lineTo(rx+rr, ry+rh);
+      ctx.quadraticCurveTo(rx, ry+rh, rx, ry+rh-rr);
+      ctx.lineTo(rx, ry+rr);
+      ctx.quadraticCurveTo(rx, ry, rx+rr, ry);
+      ctx.closePath();
+      ctx.fill(); ctx.stroke();
+
+      // Cabin / windshield
+      ctx.fillStyle = 'rgba(100,180,220,0.55)';
+      ctx.strokeStyle = '#1a5276';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(-cw*0.12, cy - ch*0.5 - 2);
+      ctx.lineTo(cw*0.18, cy - ch*0.5 - 2);
+      ctx.lineTo(cw*0.14, cy - ch*0.5 - 16);
+      ctx.lineTo(-cw*0.08, cy - ch*0.5 - 16);
+      ctx.closePath();
+      ctx.fill(); ctx.stroke();
+
+      // Headlights
+      ctx.fillStyle = '#f9e79f';
+      ctx.beginPath(); ctx.arc(cw*0.5 - 4, cy - 2, 4, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle = '#f5b041';
+      ctx.beginPath(); ctx.arc(cw*0.5 - 4, cy - 2, 2.2, 0, Math.PI*2); ctx.fill();
+
+      // Exhaust
+      ctx.fillStyle = '#444';
+      ctx.fillRect(-cw*0.5 - 7, cy + 3, 9, 5);
+
+      // Suspension lines
+      ctx.strokeStyle = 'rgba(60,60,60,0.7)';
+      ctx.lineWidth = 2;
+      for (const w of this.wheels) {
+        ctx.beginPath();
+        ctx.moveTo(w.localX * 0.3, cy + ch*0.3);
+        ctx.lineTo(w.localX, w.localY - 2);
+        ctx.stroke();
+      }
+
+      // Wheels
+      for (const w of this.wheels) {
+        ctx.save();
+        ctx.translate(w.localX, w.localY / this.squash);
+        ctx.rotate(w.angle);
+        // Tire
+        ctx.beginPath(); ctx.arc(0,0,w.radius,0,Math.PI*2);
+        ctx.fillStyle = '#1a1a1a'; ctx.fill();
+        ctx.strokeStyle = '#333'; ctx.lineWidth = 2; ctx.stroke();
+        // Rim
+        ctx.beginPath(); ctx.arc(0,0,w.radius*0.55,0,Math.PI*2);
+        ctx.fillStyle = '#d5dbdb'; ctx.fill();
+        // Spokes
+        ctx.strokeStyle = '#7f8c8d'; ctx.lineWidth = 2.2;
+        for (let i=0;i<5;i++) {
+          const a = (i/5)*Math.PI*2;
+          ctx.beginPath(); ctx.moveTo(0,0);
+          ctx.lineTo(Math.cos(a)*w.radius*0.5, Math.sin(a)*w.radius*0.5); ctx.stroke();
+        }
+        ctx.beginPath(); ctx.arc(0,0,3.5,0,Math.PI*2);
+        ctx.fillStyle = '#555'; ctx.fill();
+        ctx.restore();
+      }
+      ctx.restore();
+
+      if (debug) {
+        for (const w of this.wheels) {
+          const p = w.worldPosition(this.x, this.y, this.angle);
+          ctx.beginPath();
+          ctx.arc(p.x - camera.viewX, p.y - camera.viewY, w.radius, 0, Math.PI*2);
+          ctx.strokeStyle = w.onGround ? '#0f0' : '#f00';
+          ctx.lineWidth = 1.5; ctx.stroke();
+        }
+      }
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // PhysicsWorld / CollisionSystem / AssetGenerator / Animation
+  // ─────────────────────────────────────────────────────────────
+  class PhysicsWorld {
+    constructor(terrain) { this.terrain = terrain; }
+    step(dt, vehicle, input, particles, camera) {
+      vehicle.update(dt, input, this.terrain, particles, camera);
+    }
+  }
+  class CollisionSystem { constructor() {} }
+  class AssetGenerator { constructor() {} }
+  class Animation { constructor() {} }
+
+  // ─────────────────────────────────────────────────────────────
+  // Renderer (draws gauges too)
+  // ─────────────────────────────────────────────────────────────
+  class Renderer {
+    constructor(canvas) {
+      this.canvas = canvas;
+      this.ctx = canvas.getContext('2d');
+      this.width = 0; this.height = 0;
+    }
+    resize(w, h) {
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      this.canvas.width = w * dpr; this.canvas.height = h * dpr;
+      this.canvas.style.width = w + 'px'; this.canvas.style.height = h + 'px';
+      this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      this.width = w; this.height = h;
+    }
+    render(background, terrain, vehicle, camera, particles, debug) {
+      background.render(this.ctx, camera, terrain);
+      terrain.render(this.ctx, camera);
+      particles.render(this.ctx, camera);
+      vehicle.render(this.ctx, camera, debug);
+      this._drawGauges(vehicle);
+      if (debug) {
+        this.ctx.fillStyle = 'rgba(0,255,255,0.6)';
+        for (let wx = camera.viewX; wx < camera.viewX + camera.width; wx += 45) {
+          const wy = terrain.getHeight(wx);
+          this.ctx.fillRect(wx - camera.viewX - 1.5, wy - camera.viewY - 1.5, 3, 3);
+        }
+      }
+    }
+    _drawGauges(vehicle) {
+      const ctx = this.ctx;
+      const cx = this.width * 0.5;
+      const cy = this.height - 100;
+      // Speedometer
+      this._gauge(ctx, cx - 48, cy, 38, vehicle.speed / Config.MAX_SPEED, '#3498db', Math.round(vehicle.speed * 0.11), 'km/h');
+      // RPM
+      this._gauge(ctx, cx + 48, cy, 28, vehicle.rpm, '#e74c3c', '', 'RPM');
+    }
+    _gauge(ctx, x, y, r, value, color, label, unit) {
+      value = MathUtils.clamp(value, 0, 1);
+      ctx.save();
+      ctx.translate(x, y);
+      // Outer ring
+      ctx.beginPath();
+      ctx.arc(0, 0, r + 4, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+      ctx.lineWidth = 5;
+      ctx.stroke();
+      // Background arc
+      ctx.beginPath();
+      ctx.arc(0, 0, r, Math.PI * 0.75, Math.PI * 2.25);
+      ctx.strokeStyle = 'rgba(0,0,0,0.35)';
+      ctx.lineWidth = 6;
+      ctx.stroke();
+      // Value arc
+      const start = Math.PI * 0.75;
+      const end = start + value * Math.PI * 1.5;
+      ctx.beginPath();
+      ctx.arc(0, 0, r, start, end);
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 6;
+      ctx.lineCap = 'round';
+      ctx.stroke();
+      // Needle
+      const ang = start + value * Math.PI * 1.5;
+      ctx.rotate(ang);
+      ctx.beginPath();
+      ctx.moveTo(-3, 0); ctx.lineTo(0, -r + 6); ctx.lineTo(3, 0);
+      ctx.fillStyle = '#fff';
+      ctx.fill();
+      ctx.rotate(-ang);
+      // Center hub
+      ctx.beginPath(); ctx.arc(0, 0, 5, 0, Math.PI * 2);
+      ctx.fillStyle = '#fff'; ctx.fill();
+      // Label
+      if (label !== '') {
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 14px system-ui';
+        ctx.textAlign = 'center';
+        ctx.fillText(label, 0, 6);
+        ctx.font = '9px system-ui';
+        ctx.fillStyle = 'rgba(255,255,255,0.6)';
+        ctx.fillText(unit, 0, 18);
+      } else {
+        ctx.fillStyle = 'rgba(255,255,255,0.7)';
+        ctx.font = '9px system-ui';
+        ctx.textAlign = 'center';
+        ctx.fillText(unit, 0, 5);
+      }
+      ctx.restore();
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // UIManager
+  // ─────────────────────────────────────────────────────────────
+  class UIManager {
+    constructor() {
+      this.distEl = document.getElementById('distValue');
+      this.bestEl = document.getElementById('bestValue');
+      this.coinEl = document.getElementById('coinValue');
+      this.fuelEl = document.getElementById('fuelFill');
+      this.pauseMenu = document.getElementById('pause-menu');
+      this.settingsMenu = document.getElementById('settings-menu');
+      this.rotateOverlay = document.getElementById('rotate-overlay');
+      this.showFps = false;
+      this._displayDist = 0;
+      this._displayCoins = 0;
+    }
+    update(vehicle, best, fps) {
+      // Smooth distance counter
+      this._displayDist = MathUtils.lerp(this._displayDist, vehicle.distance / 10, 0.15);
+      this.distEl.textContent = Math.floor(this._displayDist) + ' m';
+      this.bestEl.textContent = 'Best ' + Math.floor(best / 10) + ' m';
+
+      // Smooth coins
+      this._displayCoins = MathUtils.lerp(this._displayCoins, vehicle.coins, 0.2);
+      this.coinEl.textContent = Math.floor(this._displayCoins);
+
+      // Fuel bar
+      const pct = (vehicle.fuel / Config.FUEL_MAX) * 100;
+      this.fuelEl.style.width = pct + '%';
+      this.fuelEl.classList.remove('low', 'critical');
+      if (pct < 20) this.fuelEl.classList.add('critical');
+      else if (pct < 45) this.fuelEl.classList.add('low');
+    }
+    showPause(v) { this.pauseMenu.classList.toggle('show', v); }
+    showSettings(v) { this.settingsMenu.classList.toggle('show', v); }
+    showRotate(v) { this.rotateOverlay.classList.toggle('show', v); }
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // SaveManager
+  // ─────────────────────────────────────────────────────────────
+  class SaveManager {
+    constructor() {
+      this.key = 'hillclimb_v12';
+      this.data = {
+        bestDistance: 0, coins: 0,
+        sound: true, music: true, showFps: false, debug: false,
+        lastVersion: Config.VERSION
+      };
+      this.load();
+    }
+    save() {
+      try {
+        this.data.lastVersion = Config.VERSION;
+        localStorage.setItem(this.key, JSON.stringify(this.data));
+      } catch (_) {}
+    }
+    load() {
+      try {
+        const raw = localStorage.getItem(this.key);
+        if (raw) {
+          const p = JSON.parse(raw);
+          Object.assign(this.data, {
+            bestDistance: p.bestDistance || 0,
+            coins: p.coins || 0,
+            sound: p.sound !== false,
+            music: p.music !== false,
+            showFps: !!p.showFps,
+            debug: !!p.debug
+          });
+        }
+      } catch (_) {}
+      return this.data;
+    }
+    updateBest(d) {
+      if (d > this.data.bestDistance) {
+        this.data.bestDistance = d;
+        this.save();
+      }
+    }
+    clear() {
+      this.data = { bestDistance:0, coins:0, sound:true, music:true, showFps:false, debug:false, lastVersion: Config.VERSION };
+      try { localStorage.removeItem(this.key); } catch(_) {}
+      this.save();
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // AudioManager (placeholders)
+  // ─────────────────────────────────────────────────────────────
+  class AudioManager {
+    constructor() {
+      this.enabled = true;
+      this.musicEnabled = true;
+      this.volume = 0.7;
+      // Future Web Audio API: engine loop, brake squeal, coin collect,
+      // fuel warning, crash, jump whoosh — all procedural or data-URI.
+    }
+    play(name) {
+      if (!this.enabled) return;
+      // Placeholder: engine, brake, coin, fuel, crash, jump
+    }
+    setSound(v) { this.enabled = v; }
+    setMusic(v) { this.musicEnabled = v; }
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // Scene
+  // ─────────────────────────────────────────────────────────────
+  class Scene {
+    constructor() {
+      this.terrain = new Terrain();
+      this.background = new Background();
+      this.particles = new ParticleSystem();
+      const sx = 280;
+      const sy = this.terrain.getHeight(sx) - Config.WHEEL_RADIUS - 45;
+      this.vehicle = new Vehicle(sx, sy);
+      this.physics = new PhysicsWorld(this.terrain);
+      this.collision = new CollisionSystem();
+    }
+    update(dt, input, camera) {
+      this.physics.step(dt, this.vehicle, input, this.particles, camera);
+      this.particles.update(dt);
+      this.background.update(dt, camera);
+    }
+    render(renderer, camera, debug) {
+      renderer.render(this.background, this.terrain, this.vehicle, camera, this.particles, debug);
+    }
+    reset() {
+      const sx = 280;
+      const sy = this.terrain.getHeight(sx) - Config.WHEEL_RADIUS - 45;
+      this.vehicle = new Vehicle(sx, sy);
+      this.particles = new ParticleSystem();
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // GameLoop
+  // ─────────────────────────────────────────────────────────────
+  class GameLoop {
+    constructor(updateFn, renderFn) {
+      this.updateFn = updateFn; this.renderFn = renderFn;
+      this.lastTime = 0; this.running = false; this.paused = false;
+      this.rafId = null; this.fps = 60;
+      this._fc = 0; this._ft = 0;
+    }
+    start() {
+      if (this.running) return;
+      this.running = true;
+      this.lastTime = performance.now();
+      this.rafId = requestAnimationFrame(t => this._frame(t));
+    }
+    stop() { this.running = false; if (this.rafId) cancelAnimationFrame(this.rafId); }
+    togglePause() { this.paused = !this.paused; return this.paused; }
+    _frame(now) {
+      if (!this.running) return;
+      let dt = (now - this.lastTime) / 1000;
+      this.lastTime = now;
+      if (dt > 0.05) dt = 0.05;
+      if (!this.paused) this.updateFn(dt);
+      this.renderFn();
+      this._fc++; this._ft += dt;
+      if (this._ft >= 0.4) {
+        this.fps = Math.round(this._fc / this._ft);
+        this._fc = 0; this._ft = 0;
+      }
+      this.rafId = requestAnimationFrame(t => this._frame(t));
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // Game
+  // ─────────────────────────────────────────────────────────────
+  class Game {
+    constructor() {
+      this.canvas = document.getElementById('gameCanvas');
+      this.renderer = new Renderer(this.canvas);
+      this.camera = new Camera();
+      this.input = new InputManager();
+      this.scene = new Scene();
+      this.ui = new UIManager();
+      this.save = new SaveManager();
+      this.audio = new AudioManager();
+      this.debug = this.save.data.debug;
+      this.settingsOpen = false;
+
+      this.audio.setSound(this.save.data.sound);
+      this.audio.setMusic(this.save.data.music);
+
+      // Restore coins
+      this.scene.vehicle.coins = this.save.data.coins || 0;
+
+      this.loop = new GameLoop(dt => this.update(dt), () => this.render());
+
+      this._onResize = this._onResize.bind(this);
+      window.addEventListener('resize', this._onResize);
+      window.addEventListener('orientationchange', () => setTimeout(() => this._onResize(), 120));
+      this._onResize();
+
+      document.body.addEventListener('touchmove', e => e.preventDefault(), { passive: false });
+      document.addEventListener('gesturestart', e => e.preventDefault());
+
+      this._bindMenus();
+      this._checkOrientation();
+    }
+
+    _bindMenus() {
+      document.getElementById('btnResume').onclick = () => this._setPaused(false);
+      document.getElementById('btnExitPause').onclick = () => this._setPaused(false);
+      document.getElementById('btnRestart').onclick = () => {
+        this.scene.reset();
+        this.scene.vehicle.coins = this.save.data.coins || 0;
+        this._setPaused(false);
+      };
+      document.getElementById('btnOpenSettings').onclick = () => {
+        this.ui.showPause(false);
+        this.settingsOpen = true;
+        this.ui.showSettings(true);
+      };
+      document.getElementById('btnCloseSettings').onclick = () => {
+        this.settingsOpen = false;
+        this.ui.showSettings(false);
+        if (this.loop.paused) this.ui.showPause(true);
+      };
+      document.getElementById('btnResetProgress').onclick = () => {
+        this.save.clear();
+        this.scene.reset();
+        this.debug = false;
+        this._syncToggles();
+      };
+
+      // Toggles
+      const bindToggle = (id, key, cb) => {
+        const el = document.getElementById(id);
+        el.classList.toggle('on', this.save.data[key]);
+        el.onclick = () => {
+          this.save.data[key] = !this.save.data[key];
+          el.classList.toggle('on', this.save.data[key]);
+          this.save.save();
+          if (cb) cb(this.save.data[key]);
+        };
+      };
+      bindToggle('togSound', 'sound', v => this.audio.setSound(v));
+      bindToggle('togMusic', 'music', v => this.audio.setMusic(v));
+      bindToggle('togFps', 'showFps', v => this.ui.showFps = v);
+      bindToggle('togDebug', 'debug', v => this.debug = v);
+    }
+
+    _syncToggles() {
+      ['togSound','togMusic','togFps','togDebug'].forEach(id => {
+        const key = id.replace('tog','').toLowerCase();
+        const map = { sound:'sound', music:'music', fps:'showFps', debug:'debug' };
+        document.getElementById(id).classList.toggle('on', !!this.save.data[map[key]]);
+      });
+    }
+
+    _setPaused(v) {
+      this.loop.paused = v;
+      this.ui.showPause(v);
+    }
+
+    _checkOrientation() {
+      const isPortrait = window.innerHeight > window.innerWidth;
+      this.ui.showRotate(isPortrait);
+      if (isPortrait && !this.loop.paused) {
+        this.loop.paused = true;
+      }
+    }
+
+    _onResize() {
+      const w = window.innerWidth, h = window.innerHeight;
+      this.renderer.resize(w, h);
+      this.camera.resize(w, h);
+      this._checkOrientation();
+    }
+
+    update(dt) {
+      if (this.input.consumePause()) {
+        if (this.settingsOpen) {
+          this.settingsOpen = false;
+          this.ui.showSettings(false);
+        } else {
+          this._setPaused(!this.loop.paused);
+        }
+      }
+      if (this.input.consumeSettings()) {
+        this.settingsOpen = !this.settingsOpen;
+        this.ui.showSettings(this.settingsOpen);
+        if (this.settingsOpen) this.ui.showPause(false);
+        else if (this.loop.paused) this.ui.showPause(true);
+      }
+
+      if (this.loop.paused || this.settingsOpen) return;
+
+      this.scene.update(dt, this.input, this.camera);
+      this.camera.follow(this.scene.vehicle.x, this.scene.vehicle.y, this.scene.vehicle.vx, dt);
+
+      this.save.updateBest(this.scene.vehicle.distance);
+      // Persist coins occasionally
+      if (Math.floor(this.scene.vehicle.coins) !== this.save.data.coins) {
+        this.save.data.coins = Math.floor(this.scene.vehicle.coins);
+        this.save.save();
+      }
+
+      this.ui.update(this.scene.vehicle, this.save.data.bestDistance, this.loop.fps);
+    }
+
+    render() {
+      this.scene.render(this.renderer, this.camera, this.debug);
+    }
+
+    start() { this.loop.start(); }
+  }
+
+  // Bootstrap
+  window.addEventListener('load', () => {
+    const game = new Game();
+    game.start();
+  });
+  </script>
+</body>
+</html>
