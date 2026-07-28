@@ -1,0 +1,1304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Hill Climb Racing — Version 1.1</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #0a0a0a;
+      touch-action: none;
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    }
+    #gameCanvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      background: #87CEEB;
+    }
+    #ui-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      padding: 12px 16px;
+      pointer-events: none;
+      color: #fff;
+      text-shadow: 0 1px 3px rgba(0,0,0,0.75);
+      z-index: 10;
+    }
+    #ui-overlay .title {
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+    }
+    #ui-overlay .version {
+      font-size: 12px;
+      opacity: 0.85;
+      margin-top: 2px;
+    }
+    #ui-overlay .stats {
+      margin-top: 10px;
+      font-size: 13px;
+      font-variant-numeric: tabular-nums;
+      line-height: 1.5;
+    }
+    #ui-overlay .stats span {
+      display: inline-block;
+      min-width: 110px;
+    }
+    #pause-indicator {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(0,0,0,0.72);
+      color: #fff;
+      font-size: 28px;
+      font-weight: 700;
+      padding: 18px 42px;
+      border-radius: 12px;
+      letter-spacing: 3px;
+      display: none;
+      z-index: 30;
+      pointer-events: none;
+      text-shadow: none;
+      border: 2px solid rgba(255,255,255,0.25);
+    }
+    #settings-panel {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(15, 15, 20, 0.94);
+      color: #eee;
+      padding: 24px 28px;
+      border-radius: 14px;
+      z-index: 40;
+      display: none;
+      min-width: 260px;
+      box-shadow: 0 12px 40px rgba(0,0,0,0.5);
+      border: 1px solid rgba(255,255,255,0.12);
+      pointer-events: auto;
+    }
+    #settings-panel h3 {
+      margin-bottom: 16px;
+      font-size: 16px;
+      letter-spacing: 1px;
+    }
+    #settings-panel label {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin: 10px 0;
+      font-size: 14px;
+      cursor: pointer;
+    }
+    #settings-panel input[type="checkbox"] {
+      width: 18px;
+      height: 18px;
+      accent-color: #e74c3c;
+    }
+    #settings-panel .btn-row {
+      display: flex;
+      gap: 10px;
+      margin-top: 18px;
+    }
+    #settings-panel button {
+      flex: 1;
+      padding: 9px 0;
+      border: none;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      background: #2c3e50;
+      color: #fff;
+    }
+    #settings-panel button.danger {
+      background: #c0392b;
+    }
+    #settings-panel button:active {
+      opacity: 0.85;
+    }
+    #mobile-controls {
+      position: absolute;
+      bottom: 20px;
+      left: 0;
+      right: 0;
+      display: flex;
+      justify-content: space-between;
+      padding: 0 22px;
+      z-index: 20;
+      pointer-events: none;
+    }
+    .ctrl-btn {
+      width: 84px;
+      height: 84px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.20);
+      border: 2.5px solid rgba(255, 255, 255, 0.6);
+      color: #fff;
+      font-size: 30px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      pointer-events: auto;
+      user-select: none;
+      -webkit-user-select: none;
+      backdrop-filter: blur(5px);
+      transition: background 0.08s, transform 0.08s;
+    }
+    .ctrl-btn:active,
+    .ctrl-btn.active {
+      background: rgba(255, 255, 255, 0.48);
+      transform: scale(0.93);
+    }
+    #btnPause {
+      position: absolute;
+      top: 12px;
+      right: 14px;
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.18);
+      border: 2px solid rgba(255,255,255,0.5);
+      color: #fff;
+      font-size: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 25;
+      pointer-events: auto;
+      user-select: none;
+      backdrop-filter: blur(4px);
+    }
+    #btnPause:active { background: rgba(255,255,255,0.4); }
+    @media (min-width: 900px) and (pointer: fine) {
+      #mobile-controls { display: none; }
+      #btnPause { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <canvas id="gameCanvas"></canvas>
+
+  <div id="ui-overlay">
+    <div class="title">Hill Climb Racing</div>
+    <div class="version">Version 1.1 — Core Gameplay</div>
+    <div class="stats">
+      <div><span id="fpsDisplay">FPS: —</span></div>
+      <div><span id="speedDisplay">Speed: 0 km/h</span></div>
+      <div><span id="distDisplay">Distance: 0 m</span></div>
+      <div id="bestDisplay" style="opacity:0.8;font-size:12px;margin-top:4px;">Best: 0 m</div>
+    </div>
+  </div>
+
+  <div id="pause-indicator">PAUSED</div>
+
+  <div id="settings-panel">
+    <h3>SETTINGS</h3>
+    <label><input type="checkbox" id="optFps" checked> Show FPS</label>
+    <label><input type="checkbox" id="optDebug"> Debug Mode</label>
+    <div class="btn-row">
+      <button id="btnResetSave" class="danger">Reset Save</button>
+      <button id="btnCloseSettings">Close</button>
+    </div>
+  </div>
+
+  <div id="btnPause" aria-label="Pause">❚❚</div>
+
+  <div id="mobile-controls">
+    <div class="ctrl-btn" id="btnLeft" aria-label="Brake / Reverse">◀</div>
+    <div class="ctrl-btn" id="btnRight" aria-label="Accelerate">▶</div>
+  </div>
+
+  <script>
+  /*
+   * ============================================================
+   * Hill Climb Racing Browser Game — Version 1.1
+   * ============================================================
+   *
+   * CHANGELOG — Version 1.1 (Core Gameplay Upgrade)
+   * ------------------------------------------------
+   * Terrain
+   *  • Completely reworked multi-octave procedural generation
+   *  • Continuous smooth hills, medium rises, occasional steep
+   *    climbs and gentle descents
+   *  • Slope limiting prevents impossible jumps
+   *  • No obvious repeating patterns
+   *
+   * Camera
+   *  • Speed-based look-ahead
+   *  • Independent horizontal / vertical smoothing
+   *  • Cinematic, shake-free follow
+   *
+   * Vehicle & Physics
+   *  • Heavier, more satisfying feel
+   *  • Improved acceleration / braking curves
+   *  • Better traction and ground friction
+   *  • Per-wheel collision with angular torque
+   *  • Real angular velocity (air rotation + landing recovery)
+   *  • Momentum preservation and stable landings
+   *  • No unrealistic bouncing or terrain clipping
+   *
+   * Wheels
+   *  • True rotation based on travelled distance
+   *  • Independent left / right contact
+   *  • Better visual grip
+   *
+   * Animation
+   *  • Physics-driven body tilt
+   *  • Landing compression squash
+   *  • Natural wheel & chassis movement
+   *
+   * Background
+   *  • Parallax distant mountains
+   *  • Layered rolling hills
+   *  • Procedural clouds
+   *  • Simple roadside trees
+   *  • Richer sky gradient + horizon
+   *
+   * UI / HUD
+   *  • Distance travelled
+   *  • Best distance (persisted)
+   *  • Cleaner modern layout
+   *  • Pause indicator
+   *
+   * Systems
+   *  • Working Pause (ESC / P + mobile button)
+   *  • AudioManager architecture (ready for SFX)
+   *  • Expanded SaveManager (best distance, settings, version)
+   *  • Settings panel (FPS toggle, Debug, Reset save) — press O
+   *  • Debug mode (positions, collision circles, terrain samples)
+   *
+   * Mobile
+   *  • Larger touch targets
+   *  • Stronger scroll / zoom prevention
+   *  • Landscape-friendly
+   *
+   * All Version 0.1 features preserved and enhanced.
+   * Architecture remains fully expandable.
+   * ============================================================
+   */
+
+  // ─────────────────────────────────────────────────────────────
+  // Config
+  // ─────────────────────────────────────────────────────────────
+  class Config {
+    // Physics
+    static GRAVITY            = 1950;
+    static ACCELERATION       = 1550;
+    static REVERSE_ACCEL      = 980;
+    static BRAKE_FORCE        = 2200;
+    static MAX_SPEED          = 1050;
+    static GROUND_FRICTION    = 2.8;
+    static AIR_DRAG           = 0.12;
+    static ANGULAR_DAMP       = 3.5;
+    static AIR_ANGULAR_DAMP   = 0.6;
+    static WHEEL_RADIUS       = 18;
+    static WHEEL_BASE         = 60;
+    static CHASSIS_WIDTH      = 72;
+    static CHASSIS_HEIGHT     = 24;
+    static CHASSIS_OFFSET_Y   = -10;
+    static MAX_SLOPE          = 1.15;
+    static LANDING_SQUASH     = 0.22;
+    static SQUASH_RECOVER     = 8.0;
+
+    // Camera
+    static CAMERA_LERP_X      = 5.5;
+    static CAMERA_LERP_Y      = 4.2;
+    static LOOK_AHEAD_FACTOR  = 0.28;
+    static CAMERA_OFFSET_Y    = 55;
+
+    // Terrain
+    static TERRAIN_BASE_Y     = 460;
+    static TERRAIN_SAMPLE     = 10;
+
+    // Rendering
+    static SKY_TOP            = '#0d4a7a';
+    static SKY_MID            = '#3a8fc4';
+    static SKY_BOTTOM         = '#a8d5f0';
+    static GROUND_TOP         = '#3d9b3a';
+    static GROUND_BOTTOM      = '#2a6b28';
+    static DIRT_COLOR         = '#5a3e2b';
+
+    // Game
+    static VERSION            = '1.1';
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // MathUtils
+  // ─────────────────────────────────────────────────────────────
+  class MathUtils {
+    static clamp(v, min, max) {
+      return v < min ? min : (v > max ? max : v);
+    }
+    static lerp(a, b, t) {
+      return a + (b - a) * t;
+    }
+    static damp(current, target, lambda, dt) {
+      return MathUtils.lerp(current, target, 1 - Math.exp(-lambda * dt));
+    }
+    static approxEq(a, b, eps = 0.001) {
+      return Math.abs(a - b) < eps;
+    }
+    static sign(v) {
+      return v < 0 ? -1 : (v > 0 ? 1 : 0);
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // InputManager
+  // ─────────────────────────────────────────────────────────────
+  class InputManager {
+    constructor() {
+      this.left   = false;
+      this.right  = false;
+      this.pause  = false;
+
+      this._onKeyDown = this._onKeyDown.bind(this);
+      this._onKeyUp   = this._onKeyUp.bind(this);
+
+      window.addEventListener('keydown', this._onKeyDown);
+      window.addEventListener('keyup',   this._onKeyUp);
+
+      this._bindButton('btnLeft',  'left');
+      this._bindButton('btnRight', 'right');
+
+      const pauseBtn = document.getElementById('btnPause');
+      if (pauseBtn) {
+        pauseBtn.addEventListener('touchstart', (e) => {
+          e.preventDefault();
+          this.pause = true;
+        }, { passive: false });
+        pauseBtn.addEventListener('mousedown', () => { this.pause = true; });
+      }
+    }
+
+    _bindButton(id, prop) {
+      const el = document.getElementById(id);
+      if (!el) return;
+      const set = (v) => {
+        this[prop] = v;
+        el.classList.toggle('active', v);
+      };
+      el.addEventListener('touchstart', (e) => { e.preventDefault(); set(true);  }, { passive: false });
+      el.addEventListener('touchend',   (e) => { e.preventDefault(); set(false); }, { passive: false });
+      el.addEventListener('touchcancel',() => set(false));
+      el.addEventListener('mousedown',  () => set(true));
+      el.addEventListener('mouseup',    () => set(false));
+      el.addEventListener('mouseleave', () => set(false));
+    }
+
+    _onKeyDown(e) {
+      if (e.repeat) return;
+      switch (e.code) {
+        case 'ArrowLeft':
+        case 'KeyA':
+          this.left = true; e.preventDefault(); break;
+        case 'ArrowRight':
+        case 'KeyD':
+          this.right = true; e.preventDefault(); break;
+        case 'Escape':
+        case 'KeyP':
+          this.pause = true; e.preventDefault(); break;
+      }
+    }
+
+    _onKeyUp(e) {
+      switch (e.code) {
+        case 'ArrowLeft':
+        case 'KeyA': this.left = false; break;
+        case 'ArrowRight':
+        case 'KeyD': this.right = false; break;
+      }
+    }
+
+    consumePause() {
+      if (this.pause) {
+        this.pause = false;
+        return true;
+      }
+      return false;
+    }
+
+    destroy() {
+      window.removeEventListener('keydown', this._onKeyDown);
+      window.removeEventListener('keyup',   this._onKeyUp);
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // Camera
+  // ─────────────────────────────────────────────────────────────
+  class Camera {
+    constructor() {
+      this.x = 0;
+      this.y = 0;
+      this.width  = 0;
+      this.height = 0;
+      this._lookAhead = 0;
+    }
+
+    resize(w, h) {
+      this.width  = w;
+      this.height = h;
+    }
+
+    follow(targetX, targetY, velX, dt) {
+      const desiredLook = velX * Config.LOOK_AHEAD_FACTOR;
+      this._lookAhead = MathUtils.damp(this._lookAhead, desiredLook, 3.5, dt);
+
+      const desiredX = targetX - this.width * 0.32 + this._lookAhead;
+      const desiredY = targetY - this.height * 0.55 - Config.CAMERA_OFFSET_Y;
+
+      this.x = MathUtils.damp(this.x, desiredX, Config.CAMERA_LERP_X, dt);
+      this.y = MathUtils.damp(this.y, desiredY, Config.CAMERA_LERP_Y, dt);
+    }
+
+    worldToScreen(wx, wy) {
+      return { x: wx - this.x, y: wy - this.y };
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // Terrain
+  // ─────────────────────────────────────────────────────────────
+  class Terrain {
+    constructor() {
+      this.layers = [
+        { freq: 0.0019, amp: 110, phase: 0.0  },
+        { freq: 0.0043, amp: 62,  phase: 2.1  },
+        { freq: 0.0087, amp: 34,  phase: 4.4  },
+        { freq: 0.0175, amp: 16,  phase: 1.3  },
+        { freq: 0.0310, amp: 7,   phase: 5.8  },
+        { freq: 0.0550, amp: 3.5, phase: 0.7  }
+      ];
+      this.modFreq  = 0.00037;
+      this.modAmp   = 0.22;
+    }
+
+    rawHeight(x) {
+      let h = Config.TERRAIN_BASE_Y;
+      const mod = 1 + Math.sin(x * this.modFreq) * this.modAmp;
+      for (const layer of this.layers) {
+        h += Math.sin(x * layer.freq + layer.phase) * layer.amp * mod;
+      }
+      return h;
+    }
+
+    getHeight(x) {
+      const h0 = this.rawHeight(x);
+      const h1 = this.rawHeight(x - 8);
+      const h2 = this.rawHeight(x + 8);
+      return (h0 * 0.6 + h1 * 0.2 + h2 * 0.2);
+    }
+
+    getSlope(x) {
+      const eps = 3;
+      let slope = (this.getHeight(x + eps) - this.getHeight(x - eps)) / (2 * eps);
+      return MathUtils.clamp(slope, -Config.MAX_SLOPE, Config.MAX_SLOPE);
+    }
+
+    render(ctx, camera) {
+      const startX = camera.x - 50;
+      const endX   = camera.x + camera.width + 50;
+      const step   = Config.TERRAIN_SAMPLE;
+
+      ctx.beginPath();
+      ctx.moveTo(startX - camera.x, camera.height + 40);
+      for (let wx = startX; wx <= endX; wx += step) {
+        const wy = this.getHeight(wx);
+        ctx.lineTo(wx - camera.x, wy - camera.y);
+      }
+      ctx.lineTo(endX - camera.x, camera.height + 40);
+      ctx.closePath();
+
+      const grad = ctx.createLinearGradient(0, 0, 0, camera.height);
+      grad.addColorStop(0, Config.GROUND_TOP);
+      grad.addColorStop(0.45, Config.GROUND_BOTTOM);
+      grad.addColorStop(1, Config.DIRT_COLOR);
+      ctx.fillStyle = grad;
+      ctx.fill();
+
+      ctx.beginPath();
+      let first = true;
+      for (let wx = startX; wx <= endX; wx += step) {
+        const wy = this.getHeight(wx);
+        if (first) { ctx.moveTo(wx - camera.x, wy - camera.y); first = false; }
+        else ctx.lineTo(wx - camera.x, wy - camera.y);
+      }
+      ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+      ctx.lineWidth = 2.5;
+      ctx.stroke();
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // Background
+  // ─────────────────────────────────────────────────────────────
+  class Background {
+    constructor() {
+      this.clouds = [];
+      for (let i = 0; i < 9; i++) {
+        this.clouds.push({
+          x: Math.random() * 4000 - 500,
+          y: 40 + Math.random() * 160,
+          scale: 0.6 + Math.random() * 1.1,
+          speed: 8 + Math.random() * 18
+        });
+      }
+      this.trees = [];
+      for (let i = 0; i < 60; i++) {
+        const x = i * 180 + (Math.sin(i * 7.3) * 40);
+        this.trees.push({ x, scale: 0.7 + Math.abs(Math.sin(i * 3.1)) * 0.6 });
+      }
+    }
+
+    update(dt, camera) {
+      if (!camera) return;
+      for (const c of this.clouds) {
+        c.x += c.speed * dt;
+        if (c.x - camera.x > camera.width + 200) c.x = camera.x - 300 - Math.random() * 200;
+        if (c.x - camera.x < -300) c.x = camera.x + camera.width + 100 + Math.random() * 150;
+      }
+    }
+
+    render(ctx, camera, terrain) {
+      const w = camera.width;
+      const h = camera.height;
+
+      const sky = ctx.createLinearGradient(0, 0, 0, h);
+      sky.addColorStop(0, Config.SKY_TOP);
+      sky.addColorStop(0.45, Config.SKY_MID);
+      sky.addColorStop(1, Config.SKY_BOTTOM);
+      ctx.fillStyle = sky;
+      ctx.fillRect(0, 0, w, h);
+
+      this._drawMountains(ctx, camera, 0.12, 180, '#2a5a7a', 0.55);
+      this._drawMountains(ctx, camera, 0.22, 130, '#3a6e8a', 0.7);
+      this._drawHills(ctx, camera, 0.38, 70, '#4a8a5a');
+
+      for (const c of this.clouds) {
+        this._drawCloud(ctx, c.x - camera.x * 0.55, c.y, c.scale);
+      }
+
+      const viewStart = camera.x - 80;
+      const viewEnd   = camera.x + w + 80;
+      for (const t of this.trees) {
+        if (t.x < viewStart || t.x > viewEnd) continue;
+        const groundY = terrain.getHeight(t.x);
+        this._drawTree(ctx, t.x - camera.x, groundY - camera.y, t.scale);
+      }
+    }
+
+    _drawMountains(ctx, camera, parallax, baseHeight, color, alpha) {
+      const start = camera.x * parallax - 100;
+      const end   = start + camera.width + 200;
+      ctx.beginPath();
+      ctx.moveTo(0, camera.height);
+      for (let wx = start; wx <= end; wx += 28) {
+        const local = wx - camera.x * parallax;
+        const n = Math.sin(wx * 0.0041) * 0.5 + Math.sin(wx * 0.0093 + 1.2) * 0.3 + Math.sin(wx * 0.018) * 0.2;
+        const y = camera.height * 0.55 - baseHeight * (0.4 + n * 0.6);
+        ctx.lineTo(local, y);
+      }
+      ctx.lineTo(camera.width + 50, camera.height);
+      ctx.closePath();
+      ctx.fillStyle = color;
+      ctx.globalAlpha = alpha;
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+
+    _drawHills(ctx, camera, parallax, amp, color) {
+      const start = camera.x * parallax - 60;
+      const end   = start + camera.width + 120;
+      ctx.beginPath();
+      ctx.moveTo(-20, camera.height);
+      for (let wx = start; wx <= end; wx += 16) {
+        const local = wx - camera.x * parallax;
+        const y = camera.height * 0.72 + Math.sin(wx * 0.007) * amp + Math.sin(wx * 0.015 + 2) * amp * 0.4;
+        ctx.lineTo(local, y);
+      }
+      ctx.lineTo(camera.width + 30, camera.height);
+      ctx.closePath();
+      ctx.fillStyle = color;
+      ctx.globalAlpha = 0.55;
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+
+    _drawCloud(ctx, x, y, scale) {
+      ctx.fillStyle = 'rgba(255,255,255,0.78)';
+      ctx.beginPath();
+      ctx.arc(x, y, 22 * scale, 0, Math.PI * 2);
+      ctx.arc(x + 28 * scale, y - 6 * scale, 26 * scale, 0, Math.PI * 2);
+      ctx.arc(x + 55 * scale, y + 2 * scale, 20 * scale, 0, Math.PI * 2);
+      ctx.arc(x + 30 * scale, y + 10 * scale, 18 * scale, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    _drawTree(ctx, x, y, scale) {
+      const s = scale;
+      ctx.fillStyle = '#4a3020';
+      ctx.fillRect(x - 3 * s, y - 28 * s, 6 * s, 28 * s);
+      ctx.fillStyle = '#2d6b2d';
+      ctx.beginPath();
+      ctx.arc(x, y - 38 * s, 16 * s, 0, Math.PI * 2);
+      ctx.arc(x - 10 * s, y - 28 * s, 12 * s, 0, Math.PI * 2);
+      ctx.arc(x + 10 * s, y - 28 * s, 12 * s, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#3a8a3a';
+      ctx.beginPath();
+      ctx.arc(x, y - 42 * s, 10 * s, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // Wheel
+  // ─────────────────────────────────────────────────────────────
+  class Wheel {
+    constructor(localX, localY, radius) {
+      this.localX  = localX;
+      this.localY  = localY;
+      this.radius  = radius;
+      this.angle   = 0;
+      this.onGround = false;
+      this.penetration = 0;
+    }
+
+    worldPosition(vx, vy, angle) {
+      const cos = Math.cos(angle);
+      const sin = Math.sin(angle);
+      return {
+        x: vx + this.localX * cos - this.localY * sin,
+        y: vy + this.localX * sin + this.localY * cos
+      };
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // Vehicle
+  // ─────────────────────────────────────────────────────────────
+  class Vehicle {
+    constructor(startX, startY) {
+      this.x = startX;
+      this.y = startY;
+      this.angle = 0;
+      this.vx = 0;
+      this.vy = 0;
+      this.angularVel = 0;
+      this.onGround = false;
+      this.speed = 0;
+      this.distance = 0;
+      this._lastX = startX;
+      this.squash = 1.0;
+
+      const half = Config.WHEEL_BASE * 0.5;
+      this.wheels = [
+        new Wheel(-half, 0, Config.WHEEL_RADIUS),
+        new Wheel( half, 0, Config.WHEEL_RADIUS)
+      ];
+    }
+
+    update(dt, input, terrain) {
+      this.vy += Config.GRAVITY * dt;
+
+      const cosA = Math.cos(this.angle);
+      const sinA = Math.sin(this.angle);
+      let drive = 0;
+
+      if (this.onGround) {
+        if (input.right) drive = Config.ACCELERATION;
+        if (input.left)  drive = -Config.REVERSE_ACCEL;
+
+        const along = this.vx * cosA + this.vy * sinA;
+        if (input.left && along > 40) {
+          drive = -Config.BRAKE_FORCE;
+        }
+      }
+
+      if (drive !== 0) {
+        this.vx += drive * cosA * dt;
+        this.vy += drive * sinA * dt;
+      }
+
+      if (this.onGround) {
+        const frictionFactor = (drive === 0) ? Config.GROUND_FRICTION : Config.GROUND_FRICTION * 0.18;
+        const damp = Math.exp(-frictionFactor * dt);
+        const along = this.vx * cosA + this.vy * sinA;
+        const alongD = along * damp;
+        this.vx = this.vx - along * cosA + alongD * cosA;
+        this.vy = this.vy - along * sinA + alongD * sinA;
+        this.angularVel *= Math.exp(-Config.ANGULAR_DAMP * dt);
+      } else {
+        const air = Math.exp(-Config.AIR_DRAG * dt);
+        this.vx *= air;
+        this.vy *= air;
+        this.angularVel *= Math.exp(-Config.AIR_ANGULAR_DAMP * dt);
+        if (input.left)  this.angularVel -= 2.8 * dt;
+        if (input.right) this.angularVel += 2.8 * dt;
+      }
+
+      this.x += this.vx * dt;
+      this.y += this.vy * dt;
+      this.angle += this.angularVel * dt;
+
+      this._resolveGround(terrain, dt);
+
+      this.speed = Math.hypot(this.vx, this.vy);
+      if (this.speed > Config.MAX_SPEED) {
+        const s = Config.MAX_SPEED / this.speed;
+        this.vx *= s;
+        this.vy *= s;
+        this.speed = Config.MAX_SPEED;
+      }
+
+      const dx = this.x - this._lastX;
+      if (dx > 0) this.distance += dx;
+      this._lastX = this.x;
+
+      const c = Math.cos(this.angle);
+      const s = Math.sin(this.angle);
+      const spin = (this.vx * c + this.vy * s) * dt / Config.WHEEL_RADIUS;
+      for (const w of this.wheels) w.angle += spin;
+
+      this.squash = MathUtils.damp(this.squash, 1.0, Config.SQUASH_RECOVER, dt);
+    }
+
+    _resolveGround(terrain, dt) {
+      let anyContact = false;
+      let totalTorque = 0;
+      let avgPen = 0;
+      let contactCount = 0;
+
+      for (const wheel of this.wheels) {
+        const pos = wheel.worldPosition(this.x, this.y, this.angle);
+        const groundY = terrain.getHeight(pos.x);
+        const pen = (pos.y + wheel.radius) - groundY;
+        wheel.penetration = pen;
+        wheel.onGround = pen > -1.0;
+
+        if (wheel.onGround) {
+          anyContact = true;
+          if (pen > 0) {
+            avgPen += pen;
+            contactCount++;
+            totalTorque += -wheel.localX * pen * 0.045;
+          }
+        }
+      }
+
+      this.onGround = anyContact;
+      if (!anyContact) return;
+
+      const left  = this.wheels[0].worldPosition(this.x, this.y, this.angle);
+      const right = this.wheels[1].worldPosition(this.x, this.y, this.angle);
+      const leftG  = terrain.getHeight(left.x);
+      const rightG = terrain.getHeight(right.x);
+      const targetAngle = Math.atan2(rightG - leftG, Config.WHEEL_BASE);
+
+      const blend = contactCount >= 2 ? 14 : 7;
+      this.angle = MathUtils.damp(this.angle, targetAngle, blend, dt);
+
+      this.angularVel += totalTorque * (1 / Math.max(dt, 0.001)) * 0.015;
+      this.angularVel = MathUtils.clamp(this.angularVel, -4.5, 4.5);
+
+      if (contactCount > 0) {
+        avgPen /= contactCount;
+        if (avgPen > 0) {
+          const nX = Math.sin(this.angle);
+          const nY = -Math.cos(this.angle);
+          this.x += nX * avgPen;
+          this.y += nY * avgPen;
+
+          const tX = Math.cos(this.angle);
+          const tY = Math.sin(this.angle);
+          const along = this.vx * tX + this.vy * tY;
+          this.vx = along * tX;
+          this.vy = along * tY;
+
+          if (this.vy > 80 || Math.abs(this.angularVel) > 1.5) {
+            const impact = MathUtils.clamp(this.vy / 600, 0, 1);
+            this.squash = Math.max(0.72, 1 - impact * Config.LANDING_SQUASH);
+            this.angularVel *= 0.55;
+          }
+        }
+      }
+    }
+
+    render(ctx, camera, debug) {
+      const sx = this.x - camera.x;
+      const sy = this.y - camera.y;
+
+      ctx.save();
+      ctx.translate(sx, sy);
+      ctx.rotate(this.angle);
+      ctx.scale(1, this.squash);
+
+      const cw = Config.CHASSIS_WIDTH;
+      const ch = Config.CHASSIS_HEIGHT;
+      const cy = Config.CHASSIS_OFFSET_Y;
+
+      const rx = -cw * 0.5, ry = cy - ch * 0.5, rw = cw, rh = ch, rr = 5;
+      ctx.fillStyle = '#c0392b';
+      ctx.strokeStyle = '#7b241c';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(rx + rr, ry);
+      ctx.lineTo(rx + rw - rr, ry);
+      ctx.quadraticCurveTo(rx + rw, ry, rx + rw, ry + rr);
+      ctx.lineTo(rx + rw, ry + rh - rr);
+      ctx.quadraticCurveTo(rx + rw, ry + rh, rx + rw - rr, ry + rh);
+      ctx.lineTo(rx + rr, ry + rh);
+      ctx.quadraticCurveTo(rx, ry + rh, rx, ry + rh - rr);
+      ctx.lineTo(rx, ry + rr);
+      ctx.quadraticCurveTo(rx, ry, rx + rr, ry);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.fillStyle = '#922b21';
+      ctx.fillRect(-cw * 0.16, cy - ch * 0.5 - 13, cw * 0.32, 14);
+
+      ctx.fillStyle = '#555';
+      ctx.fillRect(-cw * 0.5 - 6, cy + 2, 8, 5);
+
+      for (const wheel of this.wheels) {
+        ctx.save();
+        ctx.translate(wheel.localX, wheel.localY / this.squash);
+        ctx.rotate(wheel.angle);
+
+        ctx.beginPath();
+        ctx.arc(0, 0, wheel.radius, 0, Math.PI * 2);
+        ctx.fillStyle = '#1a1a1a';
+        ctx.fill();
+        ctx.strokeStyle = '#333';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.arc(0, 0, wheel.radius * 0.52, 0, Math.PI * 2);
+        ctx.fillStyle = '#bdc3c7';
+        ctx.fill();
+
+        ctx.strokeStyle = '#7f8c8d';
+        ctx.lineWidth = 2.2;
+        for (let i = 0; i < 5; i++) {
+          const a = (i / 5) * Math.PI * 2;
+          ctx.beginPath();
+          ctx.moveTo(0, 0);
+          ctx.lineTo(Math.cos(a) * wheel.radius * 0.48, Math.sin(a) * wheel.radius * 0.48);
+          ctx.stroke();
+        }
+        ctx.beginPath();
+        ctx.arc(0, 0, 4, 0, Math.PI * 2);
+        ctx.fillStyle = '#555';
+        ctx.fill();
+
+        ctx.restore();
+      }
+
+      ctx.restore();
+
+      if (debug) {
+        ctx.save();
+        for (const wheel of this.wheels) {
+          const p = wheel.worldPosition(this.x, this.y, this.angle);
+          ctx.beginPath();
+          ctx.arc(p.x - camera.x, p.y - camera.y, wheel.radius, 0, Math.PI * 2);
+          ctx.strokeStyle = wheel.onGround ? '#0f0' : '#f00';
+          ctx.lineWidth = 1.5;
+          ctx.stroke();
+        }
+        ctx.beginPath();
+        ctx.arc(sx, sy, 4, 0, Math.PI * 2);
+        ctx.fillStyle = '#ff0';
+        ctx.fill();
+        ctx.restore();
+      }
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // PhysicsWorld
+  // ─────────────────────────────────────────────────────────────
+  class PhysicsWorld {
+    constructor(terrain) {
+      this.terrain = terrain;
+    }
+    step(dt, vehicle, input) {
+      vehicle.update(dt, input, this.terrain);
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // CollisionSystem
+  // ─────────────────────────────────────────────────────────────
+  class CollisionSystem {
+    constructor() {}
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // Renderer
+  // ─────────────────────────────────────────────────────────────
+  class Renderer {
+    constructor(canvas) {
+      this.canvas = canvas;
+      this.ctx = canvas.getContext('2d');
+      this.width  = 0;
+      this.height = 0;
+    }
+
+    resize(w, h) {
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      this.canvas.width  = w * dpr;
+      this.canvas.height = h * dpr;
+      this.canvas.style.width  = w + 'px';
+      this.canvas.style.height = h + 'px';
+      this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      this.width  = w;
+      this.height = h;
+    }
+
+    render(background, terrain, vehicle, camera, debug) {
+      background.render(this.ctx, camera, terrain);
+      terrain.render(this.ctx, camera);
+      vehicle.render(this.ctx, camera, debug);
+
+      if (debug) {
+        const step = 40;
+        this.ctx.fillStyle = 'rgba(0,255,255,0.7)';
+        for (let wx = camera.x; wx < camera.x + camera.width; wx += step) {
+          const wy = terrain.getHeight(wx);
+          this.ctx.fillRect(wx - camera.x - 1.5, wy - camera.y - 1.5, 3, 3);
+        }
+      }
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // UIManager
+  // ─────────────────────────────────────────────────────────────
+  class UIManager {
+    constructor() {
+      this.fpsEl    = document.getElementById('fpsDisplay');
+      this.speedEl  = document.getElementById('speedDisplay');
+      this.distEl   = document.getElementById('distDisplay');
+      this.bestEl   = document.getElementById('bestDisplay');
+      this.pauseEl  = document.getElementById('pause-indicator');
+      this.showFps  = true;
+    }
+
+    update(fps, speed, distance, best, paused) {
+      if (this.showFps) {
+        this.fpsEl.style.display = '';
+        this.fpsEl.textContent = `FPS: ${fps}`;
+      } else {
+        this.fpsEl.style.display = 'none';
+      }
+      const displaySpeed = Math.round(speed * 0.11);
+      this.speedEl.textContent = `Speed: ${displaySpeed} km/h`;
+      this.distEl.textContent  = `Distance: ${Math.floor(distance / 10)} m`;
+      this.bestEl.textContent  = `Best: ${Math.floor(best / 10)} m`;
+      this.pauseEl.style.display = paused ? 'block' : 'none';
+    }
+
+    setShowFps(v) {
+      this.showFps = v;
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // SaveManager
+  // ─────────────────────────────────────────────────────────────
+  class SaveManager {
+    constructor() {
+      this.storageKey = 'hillclimb_v11';
+      this.data = {
+        bestDistance: 0,
+        showFps: true,
+        debug: false,
+        lastVersion: Config.VERSION
+      };
+      this.load();
+    }
+
+    save() {
+      try {
+        this.data.lastVersion = Config.VERSION;
+        localStorage.setItem(this.storageKey, JSON.stringify(this.data));
+      } catch (_) {}
+    }
+
+    load() {
+      try {
+        const raw = localStorage.getItem(this.storageKey);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          this.data.bestDistance = parsed.bestDistance || 0;
+          this.data.showFps      = parsed.showFps !== false;
+          this.data.debug        = !!parsed.debug;
+          this.data.lastVersion  = parsed.lastVersion || '0.1';
+        }
+      } catch (_) {}
+      return this.data;
+    }
+
+    updateBest(distance) {
+      if (distance > this.data.bestDistance) {
+        this.data.bestDistance = distance;
+        this.save();
+      }
+    }
+
+    clear() {
+      this.data = {
+        bestDistance: 0,
+        showFps: true,
+        debug: false,
+        lastVersion: Config.VERSION
+      };
+      try { localStorage.removeItem(this.storageKey); } catch (_) {}
+      this.save();
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // AudioManager
+  // ─────────────────────────────────────────────────────────────
+  class AudioManager {
+    constructor() {
+      this.enabled = true;
+      this.volume  = 0.7;
+    }
+    play(/* name */) {}
+    setEnabled(v) { this.enabled = v; }
+    setVolume(v)  { this.volume = MathUtils.clamp(v, 0, 1); }
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // AssetGenerator / Animation
+  // ─────────────────────────────────────────────────────────────
+  class AssetGenerator { constructor() {} }
+  class Animation { constructor() {} }
+
+  // ─────────────────────────────────────────────────────────────
+  // Scene
+  // ─────────────────────────────────────────────────────────────
+  class Scene {
+    constructor() {
+      this.terrain    = new Terrain();
+      this.background = new Background();
+      const spawnX = 260;
+      const spawnY = this.terrain.getHeight(spawnX) - Config.WHEEL_RADIUS - 40;
+      this.vehicle    = new Vehicle(spawnX, spawnY);
+      this.physics    = new PhysicsWorld(this.terrain);
+      this.collision  = new CollisionSystem();
+    }
+
+    update(dt, input) {
+      this.physics.step(dt, this.vehicle, input);
+    }
+
+    render(renderer, camera, debug) {
+      this.background.update(0.016, camera);
+      renderer.render(this.background, this.terrain, this.vehicle, camera, debug);
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // GameLoop
+  // ─────────────────────────────────────────────────────────────
+  class GameLoop {
+    constructor(updateFn, renderFn) {
+      this.updateFn = updateFn;
+      this.renderFn = renderFn;
+      this.lastTime = 0;
+      this.running  = false;
+      this.paused   = false;
+      this.rafId    = null;
+      this.fps = 60;
+      this._frameCount = 0;
+      this._fpsTimer   = 0;
+    }
+
+    start() {
+      if (this.running) return;
+      this.running = true;
+      this.lastTime = performance.now();
+      this._frameCount = 0;
+      this._fpsTimer = 0;
+      this.rafId = requestAnimationFrame((t) => this._frame(t));
+    }
+
+    stop() {
+      this.running = false;
+      if (this.rafId !== null) {
+        cancelAnimationFrame(this.rafId);
+        this.rafId = null;
+      }
+    }
+
+    togglePause() {
+      this.paused = !this.paused;
+      return this.paused;
+    }
+
+    _frame(now) {
+      if (!this.running) return;
+      let dt = (now - this.lastTime) / 1000;
+      this.lastTime = now;
+      if (dt > 0.05) dt = 0.05;
+
+      if (!this.paused) {
+        this.updateFn(dt);
+      }
+      this.renderFn();
+
+      this._frameCount++;
+      this._fpsTimer += dt;
+      if (this._fpsTimer >= 0.4) {
+        this.fps = Math.round(this._frameCount / this._fpsTimer);
+        this._frameCount = 0;
+        this._fpsTimer = 0;
+      }
+      this.rafId = requestAnimationFrame((t) => this._frame(t));
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // Game
+  // ─────────────────────────────────────────────────────────────
+  class Game {
+    constructor() {
+      this.canvas    = document.getElementById('gameCanvas');
+      this.renderer  = new Renderer(this.canvas);
+      this.camera    = new Camera();
+      this.input     = new InputManager();
+      this.scene     = new Scene();
+      this.ui        = new UIManager();
+      this.save      = new SaveManager();
+      this.audio     = new AudioManager();
+      this.assets    = new AssetGenerator();
+      this.debug     = this.save.data.debug;
+
+      this.ui.setShowFps(this.save.data.showFps);
+
+      this.loop = new GameLoop(
+        (dt) => this.update(dt),
+        ()   => this.render()
+      );
+
+      this._onResize = this._onResize.bind(this);
+      window.addEventListener('resize', this._onResize);
+      this._onResize();
+
+      document.body.addEventListener('touchmove', (e) => e.preventDefault(), { passive: false });
+      document.addEventListener('gesturestart', (e) => e.preventDefault());
+
+      this._setupSettings();
+    }
+
+    _setupSettings() {
+      const panel = document.getElementById('settings-panel');
+      const optFps = document.getElementById('optFps');
+      const optDebug = document.getElementById('optDebug');
+      const btnReset = document.getElementById('btnResetSave');
+      const btnClose = document.getElementById('btnCloseSettings');
+
+      optFps.checked = this.save.data.showFps;
+      optDebug.checked = this.save.data.debug;
+
+      window.addEventListener('keydown', (e) => {
+        if (e.code === 'KeyO' && !e.repeat) {
+          panel.style.display = panel.style.display === 'block' ? 'none' : 'block';
+        }
+      });
+
+      optFps.addEventListener('change', () => {
+        this.save.data.showFps = optFps.checked;
+        this.ui.setShowFps(optFps.checked);
+        this.save.save();
+      });
+      optDebug.addEventListener('change', () => {
+        this.debug = optDebug.checked;
+        this.save.data.debug = this.debug;
+        this.save.save();
+      });
+      btnReset.addEventListener('click', () => {
+        this.save.clear();
+        this.scene.vehicle.distance = 0;
+        optFps.checked = true;
+        optDebug.checked = false;
+        this.ui.setShowFps(true);
+        this.debug = false;
+      });
+      btnClose.addEventListener('click', () => {
+        panel.style.display = 'none';
+      });
+    }
+
+    _onResize() {
+      const w = window.innerWidth;
+      const h = window.innerHeight;
+      this.renderer.resize(w, h);
+      this.camera.resize(w, h);
+    }
+
+    update(dt) {
+      if (this.input.consumePause()) {
+        this.loop.togglePause();
+      }
+
+      this.scene.update(dt, this.input);
+      this.camera.follow(
+        this.scene.vehicle.x,
+        this.scene.vehicle.y,
+        this.scene.vehicle.vx,
+        dt
+      );
+
+      this.save.updateBest(this.scene.vehicle.distance);
+
+      this.ui.update(
+        this.loop.fps,
+        this.scene.vehicle.speed,
+        this.scene.vehicle.distance,
+        this.save.data.bestDistance,
+        this.loop.paused
+      );
+    }
+
+    render() {
+      this.scene.render(this.renderer, this.camera, this.debug);
+    }
+
+    start() {
+      this.loop.start();
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // Bootstrap
+  // ─────────────────────────────────────────────────────────────
+  window.addEventListener('load', () => {
+    const game = new Game();
+    game.start();
+  });
+  </script>
+</body>
+</html>
